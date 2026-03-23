@@ -1,0 +1,130 @@
+services:
+  pomelo_mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pomelo}
+      MYSQL_USER: ${MYSQL_USER:-pomelo_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pomelo_pass}
+    ports:
+      - "3307:3306"
+    volumes:
+      - pomelo_mysql_data:/var/lib/mysql
+      - ./pomelo-BE/docker/mysql/init:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - pomelo_net
+
+  pomelo_api:
+    build:
+      context: ./pomelo-BE
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      pomelo_mysql:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_PORT: 4000
+      MYSQL_HOST: pomelo_mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-pomelo}
+      MYSQL_USER: ${MYSQL_USER:-pomelo_user}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pomelo_pass}
+      AUTH_JWT_SECRET: ${JWT_KEY:-poner-una-clave-larga-y-segura}
+      AUTH_JWT_ISSUER:
+      AUTH_JWT_AUDIENCE:
+      OCA_API_BASE_URL: https://testsvc.oca.com.ar/WS_OEP_TEST
+      OCA_LOGIN_PATH: /OCAGEOApiController/Login
+      OCA_CREATE_SHIPMENT_PATH: /Oep_TrackEPak.asmx/IngresarOrdenRetiro
+      OCA_TRACK_CURRENT_STATUS_PATH: /Oep_TrackEPak.asmx/EstadoActual
+      OCA_TRACK_HISTORY_PATH: /Oep_TrackEPak.asmx/HistorialSeguimiento
+      OCA_CLIENT: OCA_APIGEO
+      OCA_USER: OCA_APIGEO
+      OCA_PASSWORD: oca
+      OCA_PRODUCT_CODE: OCA_TEST
+    ports:
+      - "4000:4000"
+    networks:
+      - pomelo_net
+
+  authms_sql_server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-SecurePassword123!}
+    ports:
+      - "1434:1433"
+    volumes:
+      - authms_sql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - pomelo_net
+
+  authms_api:
+    build:
+      context: ./AuthMS
+      dockerfile: src/AuthMS.Api/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      authms_sql_server:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Server=authms_sql_server,1433;Database=autenticacionPomelo;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SecurePassword123!};Encrypt=False;TrustServerCertificate=True;
+      JwtSettings__key: ${JWT_KEY:-poner-una-clave-larga-y-segura}
+      BootstrapAdmin__Enabled: "true"
+      BootstrapAdmin__Email: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:-admin@pomelo.test}
+      BootstrapAdmin__Password: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-Admin123!}
+      BootstrapAdmin__FirstName: ${AUTH_BOOTSTRAP_ADMIN_FIRST_NAME:-Admin}
+      BootstrapAdmin__LastName: ${AUTH_BOOTSTRAP_ADMIN_LAST_NAME:-Pomelo}
+      BootstrapAdmin__Dni: ${AUTH_BOOTSTRAP_ADMIN_DNI:-12345678}
+      EmailSettings__EnableEmails: "false"
+    ports:
+      - "8082:8080"
+    networks:
+      - pomelo_net
+
+  pomelo_fe:
+    build:
+      context: ./pomelo-FE
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+        NEXT_PUBLIC_AUTH_API_BASE_URL: http://localhost:8082
+    restart: unless-stopped
+    depends_on:
+      - pomelo_api
+      - authms_api
+    environment:
+      NODE_ENV: production
+      PORT: 5174
+      API_BASE_URL: http://pomelo_api:4000
+      AUTH_API_BASE_URL: http://authms_api:8080
+      AUTH_JWT_SECRET: ${JWT_KEY:-poner-una-clave-larga-y-segura}
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:4000
+      NEXT_PUBLIC_AUTH_API_BASE_URL: http://localhost:8082
+    ports:
+      - "5174:5174"
+    networks:
+      - pomelo_net
+
+volumes:
+  pomelo_mysql_data:
+  authms_sql_data:
+
+networks:
+  pomelo_net:
+    driver: bridge

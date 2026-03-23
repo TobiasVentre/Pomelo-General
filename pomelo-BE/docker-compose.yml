@@ -1,0 +1,46 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: pomelo-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: pomelo
+      MYSQL_USER: pomelo_user
+      MYSQL_PASSWORD: pomelo_pass
+    ports:
+      - "3307:3306"
+    volumes:
+      - pomelo_mysql_data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d
+
+  api:
+    build: .
+    container_name: pomelo-api
+    depends_on:
+      - mysql
+    environment:
+      NODE_ENV: development
+      APP_PORT: 4000
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: pomelo
+      MYSQL_USER: pomelo_user
+      MYSQL_PASSWORD: pomelo_pass
+      AUTH_JWT_SECRET: poner-una-clave-larga-y-segura
+      AUTH_JWT_ISSUER:
+      AUTH_JWT_AUDIENCE:
+      OCA_API_BASE_URL: https://testsvc.oca.com.ar/WS_OEP_TEST
+      OCA_LOGIN_PATH: /OCAGEOApiController/Login
+      OCA_CREATE_SHIPMENT_PATH: /Oep_TrackEPak.asmx/IngresarOrdenRetiro
+      OCA_TRACK_CURRENT_STATUS_PATH: /Oep_TrackEPak.asmx/EstadoActual
+      OCA_TRACK_HISTORY_PATH: /Oep_TrackEPak.asmx/HistorialSeguimiento
+      OCA_CLIENT: OCA_APIGEO
+      OCA_USER: OCA_APIGEO
+      OCA_PASSWORD: oca
+      OCA_PRODUCT_CODE: OCA_TEST
+    ports:
+      - "4000:4000"
+
+volumes:
+  pomelo_mysql_data:

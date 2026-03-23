@@ -1,0 +1,52 @@
+# Environment
+.env
+.env.*
+!.env.example
+!.env.local.example
+
+# Node / Next
+**/node_modules/
+**/.next/
+**/dist/
+**/coverage/
+**/*.tsbuildinfo
+
+# .NET
+**/bin/
+**/obj/
+**/artifacts/
+**/.nuget/
+**/.tools/
+**/coverage-report/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+.vs/
+*.suo
+*.user
+*.rsuser
+
+# Logs / caches
+*.log
+*.cache
+*.tmp
+
+# Local tooling
+.dotnet/
+
+# Local databases / volumes
+*.mdf
+*.ldf
+*.ndf
+
+# Temporary helper projects
+AuthMS/TempHashGen/
+AuthMS/_verify_provideradmin/
+AuthMS/_verify_provider_slice/
+
+# Git migration backups
+.git_backup_root/
+**/.git_backup/

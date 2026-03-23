@@ -1,0 +1,58 @@
+Actuá como arquitecto y dev senior .NET 9. Quiero que generes un microservicio llamado {{MS_NAME}} siguiendo
+  arquitectura hexagonal estricta + Repository + CQRS + DI + SOLID.
+
+  Contexto funcional:
+  - Dominio: {{BOUNDED_CONTEXT}}
+  - Casos de uso iniciales: {{USE_CASES}}
+  - Entidades principales: {{ENTITIES}}
+  - Integraciones externas: {{EXTERNAL_PORTS}}
+
+  Requisitos obligatorios de arquitectura:
+  1) Estructura de proyectos:
+     - src/{{MS_NAME}}.Domain
+     - src/{{MS_NAME}}.Application
+     - src/{{MS_NAME}}.Infrastructure
+     - src/{{MS_NAME}}.Api
+     - tests/{{MS_NAME}}.UnitTests
+  2) Dependencias:
+     - Domain: sin dependencias de framework.
+     - Application: depende solo de Domain.
+     - Infrastructure: depende de Application (+ Domain transitivo).
+     - Api: referencia Infrastructure (y no lógica de negocio).
+  3) CQRS:
+     - Commands/Queries separados por caso de uso.
+     - Handlers o Services por operación.
+     - Contratos en Application; implementaciones en Infrastructure.
+     - El service de Application es uno por agregado y orquesta comandos/queries.
+     - Las implementaciones concretas de CQRS deben ubicarse en Infrastructure/Commands e Infrastructure/Queries (al mismo nivel que Persistence).
+  4) Repository:
+     - Interfaces de repositorio en Application (puertos).
+     - Implementaciones EF Core en Infrastructure (adaptadores).
+     - Unit of Work explícita si hay transacciones multi-repo.
+  5) DI:
+     - Crear Extension Methods: AddApplication(), AddInfrastructure(), AddApi().
+     - No registrar servicios en masa en Program.cs; solo bootstrap.
+  6) SOLID:
+     - SRP: un caso de uso por clase.
+     - OCP: estrategias/extensiones (ej. formatters/notifiers) sin if/switch gigante.
+     - DIP: Application no conoce EF, SMTP, JWT, HTTP clients concretos.
+     - ISP: interfaces chicas por responsabilidad.
+  7) API y errores:
+     - Controllers delgados.
+     - Manejo global de excepciones con middleware/filtro único.
+     - Respuestas consistentes (ProblemDetails o ApiError estándar).
+  8) Calidad:
+     - Tests unitarios de Application.
+     - Tests de integración mínimos para Infrastructure.
+     - Logging con ILogger, nada de Console.WriteLine en Application.
+  9) Entregables:
+     - Árbol de carpetas.
+     - Código base compilable.
+     - Ejemplo completo de 1 comando + 1 query + 1 endpoint.
+     - Checklist de cumplimiento de hexagonal/CQRS/Repository/DI/SOLID.
+     - Decisiones técnicas y tradeoffs en un ADR breve.
+
+  Además:
+  - Evitar “anémico + service gigante”.
+  - No mezclar concerns de infraestructura en Application.
+  - Si hay background jobs, usar intervalos configurables por settings.

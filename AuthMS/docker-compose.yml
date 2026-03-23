@@ -1,0 +1,63 @@
+services:
+  sql_server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: authms_sql_server
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "SecurePassword123!"
+    ports:
+      - "1434:1433"
+    volumes:
+      - authms_sql_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -C -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -Q \"SELECT 1\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    networks:
+      - authms_net
+
+  authms_api:
+    build:
+      context: .
+      dockerfile: src/AuthMS.Api/Dockerfile
+    container_name: authms_api
+    depends_on:
+      sql_server:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Development"
+      ConnectionStrings__DefaultConnection: 'Server=sql_server,1433;Database=autenticacionPomelo;User Id=sa;Password=SecurePassword123!;Encrypt=False;TrustServerCertificate=True;'
+
+      DirectoryMS__BaseUrl: "http://host.docker.internal:8081"
+      JwtSettings__key: ${JWT_KEY:-dev-super-secret-key-change-me}
+      JwtSettings__issuer: ${JWT_ISSUER:-CuidarMed}
+      JwtSettings__audience: ${JWT_AUDIENCE:-CuidarMed}
+      JwtSettings__expiresInMinutes: ${JWT_EXPIRES_IN_MINUTES:-60}
+      BootstrapAdmin__Enabled: "true"
+      BootstrapAdmin__Email: "admin@pomelo.test"
+      BootstrapAdmin__Password: "Admin123!"
+      BootstrapAdmin__FirstName: "Admin"
+      BootstrapAdmin__LastName: "Pomelo"
+      BootstrapAdmin__Dni: "12345678"
+      EmailSettings__SmtpServer: ${EMAIL_SMTP_SERVER:-smtp.gmail.com}
+      EmailSettings__SmtpPort: ${EMAIL_SMTP_PORT:-587}
+      EmailSettings__SenderEmail: ${EMAIL_SENDER_EMAIL:-cuidarmed.notificaciones@gmail.com}
+      EmailSettings__SenderPassword: ${EMAIL_SENDER_PASSWORD:-kkuj rrpx tyxm ycad}
+      EmailSettings__EnableEmails: "true"
+
+      RabbitMQ__Host: "rabbitmq"
+      RabbitMQ__User: "user"
+      RabbitMQ__Pass: "pass"
+    ports:
+      - "8082:8080"
+    networks:
+      - authms_net
+
+volumes:
+  authms_sql_data:
+
+networks:
+  authms_net:
+    driver: bridge
