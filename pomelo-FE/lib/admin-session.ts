@@ -52,6 +52,20 @@ function deriveJwtSecret(secret: string): Buffer {
   return crypto.createHash("sha256").update(keyBytes).digest();
 }
 
+function shouldUseSecureCookies(): boolean {
+  const rawValue = process.env.AUTH_COOKIE_SECURE?.trim().toLowerCase();
+
+  if (rawValue === "true") {
+    return true;
+  }
+
+  if (rawValue === "false") {
+    return false;
+  }
+
+  return process.env.NODE_ENV === "production";
+}
+
 function parseCookieHeader(cookieHeader?: string): Record<string, string> {
   if (!cookieHeader) {
     return {};
@@ -132,7 +146,7 @@ function readStringClaim(payload: Record<string, unknown>, claimNames: string[])
 }
 
 export function setAdminSessionCookies(response: ServerResponse, tokens: TokenPair): void {
-  const secure = process.env.NODE_ENV === "production";
+  const secure = shouldUseSecureCookies();
 
   appendSetCookie(response, [
     serializeCookie(ACCESS_COOKIE_NAME, tokens.accessToken, {
@@ -149,7 +163,7 @@ export function setAdminSessionCookies(response: ServerResponse, tokens: TokenPa
 }
 
 export function clearAdminSessionCookies(response: ServerResponse): void {
-  const secure = process.env.NODE_ENV === "production";
+  const secure = shouldUseSecureCookies();
 
   appendSetCookie(response, [
     serializeCookie(ACCESS_COOKIE_NAME, "", {

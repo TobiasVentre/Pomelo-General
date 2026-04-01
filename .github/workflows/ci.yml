@@ -62,4 +62,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: docker compose -f docker-compose.yml config
+      - run: docker compose -f docker-compose.yml -f docker-compose.proxy.yml config

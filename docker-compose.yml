@@ -8,7 +8,7 @@ services:
       MYSQL_USER: ${MYSQL_USER:-pomelo_user}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-pomelo_pass}
     ports:
-      - "3307:3306"
+      - "${SERVICE_BIND_IP:-127.0.0.1}:3307:3306"
     volumes:
       - pomelo_mysql_data:/var/lib/mysql
       - ./pomelo-BE/docker/mysql/init:/docker-entrypoint-initdb.d
@@ -50,7 +50,7 @@ services:
       OCA_PASSWORD: oca
       OCA_PRODUCT_CODE: OCA_TEST
     ports:
-      - "4000:4000"
+      - "${SERVICE_BIND_IP:-127.0.0.1}:4000:4000"
     networks:
       - pomelo_net
 
@@ -61,7 +61,7 @@ services:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-SecurePassword123!}
     ports:
-      - "1434:1433"
+      - "${SERVICE_BIND_IP:-127.0.0.1}:1434:1433"
     volumes:
       - authms_sql_data:/var/opt/mssql
     healthcheck:
@@ -82,7 +82,7 @@ services:
       authms_sql_server:
         condition: service_healthy
     environment:
-      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: Server=authms_sql_server,1433;Database=autenticacionPomelo;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SecurePassword123!};Encrypt=False;TrustServerCertificate=True;
       JwtSettings__key: ${JWT_KEY:-poner-una-clave-larga-y-segura}
       BootstrapAdmin__Enabled: "true"
@@ -93,7 +93,7 @@ services:
       BootstrapAdmin__Dni: ${AUTH_BOOTSTRAP_ADMIN_DNI:-12345678}
       EmailSettings__EnableEmails: "false"
     ports:
-      - "8082:8080"
+      - "${SERVICE_BIND_IP:-127.0.0.1}:8082:8080"
     networks:
       - pomelo_net
 
@@ -117,7 +117,7 @@ services:
       NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:4000}
       NEXT_PUBLIC_AUTH_API_BASE_URL: ${NEXT_PUBLIC_AUTH_API_BASE_URL:-http://localhost:8082}
     ports:
-      - "5174:5174"
+      - "${SERVICE_BIND_IP:-127.0.0.1}:5174:5174"
     volumes:
       - ./pomelo-FE/public/uploads:/app/public/uploads
     networks:

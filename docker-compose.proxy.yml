@@ -1,0 +1,25 @@
+services:
+  caddy:
+    image: caddy:2.9-alpine
+    restart: unless-stopped
+    depends_on:
+      - pomelo_fe
+      - pomelo_api
+      - authms_api
+    environment:
+      POMELO_FRONTEND_SITE: ${POMELO_FRONTEND_SITE:-http://localhost}
+      POMELO_API_SITE: ${POMELO_API_SITE:-http://localhost:4000}
+      POMELO_AUTH_SITE: ${POMELO_AUTH_SITE:-http://localhost:8082}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - pomelo_net
+
+volumes:
+  caddy_data:
+  caddy_config:

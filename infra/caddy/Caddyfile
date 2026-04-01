@@ -1,0 +1,23 @@
+{$POMELO_FRONTEND_SITE:http://localhost} {
+  encode zstd gzip
+
+  handle_path /backend/* {
+    reverse_proxy pomelo_api:4000
+  }
+
+  handle_path /authms/* {
+    reverse_proxy authms_api:8080
+  }
+
+  reverse_proxy pomelo_fe:5174
+}
+
+{$POMELO_API_SITE:http://localhost:4000} {
+  encode zstd gzip
+  reverse_proxy pomelo_api:4000
+}
+
+{$POMELO_AUTH_SITE:http://localhost:8082} {
+  encode zstd gzip
+  reverse_proxy authms_api:8080
+}

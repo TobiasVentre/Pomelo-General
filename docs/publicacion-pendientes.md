@@ -10,15 +10,16 @@
 - El workflow nuevo esta en `.github/workflows/deploy.yml`.
 - El script remoto esta en `scripts/deploy-remote.sh`.
 - La guia detallada esta en `docs/deploy-github-actions.md`.
+- El proxy reverso con Caddy ya quedo versionado en `docker-compose.proxy.yml` e `infra/caddy/Caddyfile`.
 
 ## Lo Mas Importante Que Falta
 
-1. Definir las URLs publicas reales de produccion.
+1. Definir los dominios o subdominios publicos reales de produccion.
 2. Preparar el servidor con Docker, carpeta del proyecto y `.env` real.
 3. Configurar los secrets y vars en GitHub.
 4. Hacer el primer deploy manual desde GitHub Actions.
 5. Validar frontend, admin, login e imagenes subidas.
-6. Idealmente agregar proxy reverso con HTTPS antes de abrirlo al publico.
+6. Apuntar DNS y abrir `80/443` para que Caddy pueda emitir HTTPS.
 
 ## Paso A Paso Recomendado
 
@@ -55,6 +56,9 @@ Archivo: `/srv/pomelo/.env`
 Minimo necesario:
 
 ```env
+SERVICE_BIND_IP=127.0.0.1
+ENABLE_EDGE_PROXY=true
+AUTH_COOKIE_SECURE=true
 JWT_KEY=una-clave-larga-y-segura
 MYSQL_ROOT_PASSWORD=CAMBIAR
 MYSQL_DATABASE=pomelo
@@ -66,6 +70,9 @@ AUTH_BOOTSTRAP_ADMIN_PASSWORD=CAMBIAR
 AUTH_BOOTSTRAP_ADMIN_FIRST_NAME=Admin
 AUTH_BOOTSTRAP_ADMIN_LAST_NAME=Pomelo
 AUTH_BOOTSTRAP_ADMIN_DNI=12345678
+POMELO_FRONTEND_SITE=shop.tu-dominio.com
+POMELO_API_SITE=api.tu-dominio.com
+POMELO_AUTH_SITE=auth.tu-dominio.com
 NEXT_PUBLIC_API_BASE_URL=https://api.tu-dominio.com
 NEXT_PUBLIC_AUTH_API_BASE_URL=https://auth.tu-dominio.com
 ```
@@ -74,6 +81,7 @@ Importante:
 
 - No usar passwords de ejemplo en produccion.
 - `JWT_KEY` debe ser una clave larga y privada.
+- Si publicas temporalmente solo con IP y HTTP, usar `AUTH_COOKIE_SECURE=false` para que el login admin funcione sin HTTPS.
 
 ### 4. Preparar Acceso SSH Para GitHub Actions
 
@@ -101,20 +109,31 @@ Variables:
 - `DEPLOY_PATH` ejemplo `/srv/pomelo`
 - `DEPLOY_PORT` ejemplo `22`
 
-### 6. Configurar Proxy Reverso Y HTTPS
+### 6. Configurar DNS Y HTTPS
 
-Esto todavia falta y es recomendable hacerlo antes de publicar.
+El repo ya trae Caddy preparado.
 
-Objetivo:
+Objetivo operativo:
 
 - exponer solo `80/443`
 - enrutar al frontend, API y auth
-- tener certificados HTTPS
+- emitir certificados HTTPS automaticamente
 
-Opciones razonables:
+Pendientes concretos:
 
-- Caddy, mas simple
-- Nginx, mas manual
+- crear los registros DNS reales
+- abrir `80/443` en el servidor
+- cargar en `.env`:
+
+```env
+SERVICE_BIND_IP=127.0.0.1
+ENABLE_EDGE_PROXY=true
+POMELO_FRONTEND_SITE=shop.tu-dominio.com
+POMELO_API_SITE=api.tu-dominio.com
+POMELO_AUTH_SITE=auth.tu-dominio.com
+NEXT_PUBLIC_API_BASE_URL=https://api.tu-dominio.com
+NEXT_PUBLIC_AUTH_API_BASE_URL=https://auth.tu-dominio.com
+```
 
 ### 7. Hacer El Primer Deploy
 
@@ -123,7 +142,20 @@ Una vez listo lo anterior:
 1. Subir cambios a GitHub.
 2. Ejecutar `Deploy` manualmente desde Actions si queres probar controlado.
 3. Revisar logs del workflow.
-4. Verificar que el servidor ejecute `docker compose up -d --build --remove-orphans` sin errores.
+4. Verificar que el servidor ejecute `bash scripts/deploy-remote.sh` sin errores.
+
+Si todavia no tenes dominio, podes hacer una prueba temporal por IP con este bloque en `/srv/pomelo/.env`:
+
+```env
+SERVICE_BIND_IP=127.0.0.1
+ENABLE_EDGE_PROXY=true
+AUTH_COOKIE_SECURE=false
+POMELO_FRONTEND_SITE=:80
+NEXT_PUBLIC_API_BASE_URL=http://TU_IP_PUBLICA/backend
+NEXT_PUBLIC_AUTH_API_BASE_URL=http://TU_IP_PUBLICA/authms
+```
+
+Y en ese caso alcanza con abrir `80` y `22`.
 
 ### 8. Verificacion Final
 
@@ -141,8 +173,7 @@ Checklist de prueba:
 
 ## Riesgos O Mejoras Pendientes
 
-- Falta definir proxy reverso/SSL.
-- Falta revisar si conviene ocultar puertos `4000`, `5174` y `8082` detras del proxy.
+- Falta apuntar los dominios reales al servidor para activar HTTPS automatico.
 - Falta politica de backup para:
   - volumen MySQL
   - volumen SQL Server
@@ -157,7 +188,7 @@ Cuando retomemos, conviene seguir en este orden:
 1. Definir dominio/subdominios finales.
 2. Preparar `.env` de produccion.
 3. Configurar GitHub secrets.
-4. Montar proxy reverso con HTTPS.
+4. Apuntar DNS y validar Caddy/HTTPS.
 5. Ejecutar primer deploy.
 
 ## Archivos Clave
@@ -167,4 +198,6 @@ Cuando retomemos, conviene seguir en este orden:
 - `scripts/deploy-remote.sh`
 - `docs/deploy-github-actions.md`
 - `docker-compose.yml`
+- `docker-compose.proxy.yml`
+- `infra/caddy/Caddyfile`
 - `.env.example`
