@@ -51,6 +51,10 @@ SERVICE_BIND_IP=127.0.0.1
 ENABLE_EDGE_PROXY=true
 AUTH_COOKIE_SECURE=true
 JWT_KEY=una-clave-larga-y-segura
+AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES=18000
+AUTH_REFRESH_TOKEN_LENGTH=64
+AUTH_REFRESH_TOKEN_LIFETIME_MINUTES=240
+AUTH_REFRESH_TOKEN_IDLE_TIMEOUT_MINUTES=30
 MYSQL_ROOT_PASSWORD=...
 MYSQL_DATABASE=pomelo
 MYSQL_USER=pomelo_user
@@ -73,6 +77,8 @@ NEXT_PUBLIC_AUTH_API_BASE_URL=https://auth.tu-dominio.com
 `ENABLE_EDGE_PROXY=true` hace que `scripts/deploy-remote.sh` levante tambien `docker-compose.proxy.yml`. Ese es el modo recomendado cuando ya tenes dominio.
 
 `AUTH_COOKIE_SECURE=true` es el valor correcto cuando publicas con HTTPS. Si haces una prueba temporal solo con IP y HTTP, cambia esa variable a `false` o el login admin no va a poder guardar cookies de sesion.
+
+Las variables `AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES`, `AUTH_REFRESH_TOKEN_LENGTH`, `AUTH_REFRESH_TOKEN_LIFETIME_MINUTES` y `AUTH_REFRESH_TOKEN_IDLE_TIMEOUT_MINUTES` completan la configuracion que AuthMS necesita en `Production` para emitir access token y refresh token.
 
 `POMELO_FRONTEND_SITE`, `POMELO_API_SITE` y `POMELO_AUTH_SITE` son las direcciones que Caddy va a publicar. En produccion conviene usar hostnames reales sin `http://` para que Caddy emita HTTPS automaticamente.
 

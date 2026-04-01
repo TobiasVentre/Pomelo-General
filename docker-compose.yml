@@ -85,6 +85,10 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ConnectionStrings__DefaultConnection: Server=authms_sql_server,1433;Database=autenticacionPomelo;User Id=sa;Password=${MSSQL_SA_PASSWORD:-SecurePassword123!};Encrypt=False;TrustServerCertificate=True;
       JwtSettings__key: ${JWT_KEY:-poner-una-clave-larga-y-segura}
+      JwtSettings__TokenExpirationMinutes: ${AUTH_ACCESS_TOKEN_EXPIRATION_MINUTES:-18000}
+      RefreshTokenSettings__Lenght: ${AUTH_REFRESH_TOKEN_LENGTH:-64}
+      RefreshTokenSettings__LifeTimeInMinutes: ${AUTH_REFRESH_TOKEN_LIFETIME_MINUTES:-240}
+      RefreshTokenSettings__IdleTimeoutMinutes: ${AUTH_REFRESH_TOKEN_IDLE_TIMEOUT_MINUTES:-30}
       BootstrapAdmin__Enabled: "true"
       BootstrapAdmin__Email: ${AUTH_BOOTSTRAP_ADMIN_EMAIL:-admin@pomelo.test}
       BootstrapAdmin__Password: ${AUTH_BOOTSTRAP_ADMIN_PASSWORD:-Admin123!}
