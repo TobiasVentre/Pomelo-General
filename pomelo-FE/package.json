@@ -12,12 +12,14 @@
   },
   "dependencies": {
     "@types/jsonwebtoken": "^9.0.10",
+    "formidable": "^3.5.4",
     "jsonwebtoken": "^9.0.3",
     "next": "^14.2.25",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
+    "@types/formidable": "^3.5.0",
     "@types/node": "^22.10.5",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",

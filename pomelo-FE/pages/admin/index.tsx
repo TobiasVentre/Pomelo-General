@@ -1,6 +1,7 @@
 import type { GetServerSideProps } from "next";
+import Image from "next/image";
 import { useRouter } from "next/router";
-import { useState } from "react";
+import { type ChangeEvent, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { resolveAdminSession } from "../../lib/admin-session";
 import { getBackendApiBase } from "../../lib/backend-api";
@@ -75,6 +76,75 @@ const emptyProductForm: ProductFormState = {
 
 const productCategoryOptions = ["Remeras"];
 
+type AdminTab = "collections" | "products";
+type MessageTone = "success" | "error";
+
+interface UploadFileResult {
+  url: string;
+  originalName: string;
+  size: number;
+}
+
+function sortCollections(items: BackendCollectionDto[]): BackendCollectionDto[] {
+  return [...items].sort(
+    (left, right) => left.displayOrder - right.displayOrder || left.name.localeCompare(right.name)
+  );
+}
+
+function sortProducts(items: BackendProductDto[]): BackendProductDto[] {
+  return [...items].sort(
+    (left, right) => left.collection.localeCompare(right.collection) || left.name.localeCompare(right.name)
+  );
+}
+
+function appendLines(value: string, nextItems: string[]): string {
+  return [...splitLines(value), ...nextItems].join("\n");
+}
+
+function removeLineAt(value: string, indexToRemove: number): string {
+  return splitLines(value)
+    .filter((_, index) => index !== indexToRemove)
+    .join("\n");
+}
+
+function moveLine(value: string, index: number, direction: -1 | 1): string {
+  const items = splitLines(value);
+  const nextIndex = index + direction;
+
+  if (nextIndex < 0 || nextIndex >= items.length) {
+    return value;
+  }
+
+  [items[index], items[nextIndex]] = [items[nextIndex], items[index]];
+  return items.join("\n");
+}
+
+function getActiveTab(tab: string | string[] | undefined): AdminTab {
+  if (tab === "products") {
+    return "products";
+  }
+
+  if (Array.isArray(tab) && tab[0] === "products") {
+    return "products";
+  }
+
+  return "collections";
+}
+
+async function readResponseError(response: Response): Promise<string> {
+  try {
+    const payload = (await response.json()) as { message?: string; details?: string[] };
+
+    if (Array.isArray(payload.details) && payload.details.length > 0) {
+      return `${payload.message ?? "Error desconocido"}: ${payload.details.join(", ")}`;
+    }
+
+    return payload.message ?? "Error desconocido";
+  } catch {
+    return "Error desconocido";
+  }
+}
+
 function splitLines(value: string): string[] {
   return value
     .split("\n")
@@ -137,13 +207,149 @@ export default function AdminPage({
   adminEmail
 }: AdminPageProps): JSX.Element {
   const router = useRouter();
-  const collectionOptions = Array.from(new Set(collections.map((collection) => collection.name)));
+  const activeTab = getActiveTab(router.query.tab);
+  const [catalogCollections, setCatalogCollections] = useState<BackendCollectionDto[]>(() =>
+    sortCollections(collections)
+  );
+  const [catalogProducts, setCatalogProducts] = useState<BackendProductDto[]>(() =>
+    sortProducts(products)
+  );
+  const collectionOptions = Array.from(new Set(catalogCollections.map((collection) => collection.name))).sort(
+    (left, right) => left.localeCompare(right)
+  );
   const [collectionForm, setCollectionForm] = useState<CollectionFormState>(emptyCollectionForm);
   const [productForm, setProductForm] = useState<ProductFormState>(emptyProductForm);
   const [message, setMessage] = useState<string>("");
+  const [messageTone, setMessageTone] = useState<MessageTone>("success");
   const [isSavingCollection, setIsSavingCollection] = useState(false);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
+  const [isUploadingCollectionCover, setIsUploadingCollectionCover] = useState(false);
+  const [isUploadingProductImages, setIsUploadingProductImages] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const productImages = splitLines(productForm.imagesText);
+
+  const switchTab = async (tab: AdminTab): Promise<void> => {
+    if (tab === activeTab) {
+      return;
+    }
+
+    await router.replace(
+      {
+        pathname: router.pathname,
+        query: tab === "products" ? { tab } : {}
+      },
+      undefined,
+      { shallow: true }
+    );
+  };
+
+  const uploadAdminFiles = async (
+    files: FileList,
+    folder: "collections" | "products",
+    entitySlug: string
+  ): Promise<UploadFileResult[]> => {
+    const formData = new FormData();
+
+    Array.from(files).forEach((file) => {
+      formData.append("files", file);
+    });
+
+    formData.append("folder", folder);
+    if (entitySlug.trim().length > 0) {
+      formData.append("entitySlug", entitySlug.trim());
+    }
+
+    const response = await fetch("/api/admin/uploads", {
+      method: "POST",
+      body: formData
+    });
+
+    if (!response.ok) {
+      throw new Error(await readResponseError(response));
+    }
+
+    const payload = (await response.json()) as { files?: UploadFileResult[] };
+    return payload.files ?? [];
+  };
+
+  const handleCollectionCoverUpload = async (
+    event: ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingCollectionCover(true);
+    setMessage("");
+
+    try {
+      const uploadedFiles = await uploadAdminFiles(files, "collections", collectionForm.slug);
+      const uploadedCover = uploadedFiles[0];
+
+      if (!uploadedCover) {
+        throw new Error("No se pudo obtener la portada subida");
+      }
+
+      setCollectionForm((prev) => ({ ...prev, coverImageUrl: uploadedCover.url }));
+      setMessageTone("success");
+      setMessage("Portada de coleccion cargada correctamente.");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "No se pudo subir la portada.");
+    } finally {
+      setIsUploadingCollectionCover(false);
+      event.target.value = "";
+    }
+  };
+
+  const handleProductImagesUpload = async (
+    event: ChangeEvent<HTMLInputElement>
+  ): Promise<void> => {
+    const files = event.target.files;
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    setIsUploadingProductImages(true);
+    setMessage("");
+
+    try {
+      const uploadedFiles = await uploadAdminFiles(files, "products", productForm.slug);
+      const uploadedUrls = uploadedFiles.map((file) => file.url);
+
+      if (uploadedUrls.length === 0) {
+        throw new Error("No se pudieron obtener las imagenes subidas");
+      }
+
+      setProductForm((prev) => ({
+        ...prev,
+        imagesText: appendLines(prev.imagesText, uploadedUrls)
+      }));
+      setMessageTone("success");
+      setMessage("Imagenes del producto cargadas correctamente.");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "No se pudieron subir las imagenes.");
+    } finally {
+      setIsUploadingProductImages(false);
+      event.target.value = "";
+    }
+  };
+
+  const moveProductImage = (index: number, direction: -1 | 1): void => {
+    setProductForm((prev) => ({
+      ...prev,
+      imagesText: moveLine(prev.imagesText, index, direction)
+    }));
+  };
+
+  const removeProductImage = (index: number): void => {
+    setProductForm((prev) => ({
+      ...prev,
+      imagesText: removeLineAt(prev.imagesText, index)
+    }));
+  };
 
   const saveCollection = async (): Promise<void> => {
     setIsSavingCollection(true);
@@ -162,21 +368,32 @@ export default function AdminPage({
       : "/api/admin/collections";
     const method = collectionForm.id ? "PUT" : "POST";
 
-    const response = await fetch(endpoint, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const error = (await response.json()) as { message?: string; details?: string[] };
-      setMessage(`Error guardando coleccion: ${error.message ?? "desconocido"}`);
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        setMessageTone("error");
+        setMessage(`Error guardando coleccion: ${await readResponseError(response)}`);
+        return;
+      }
+
+      const savedCollection = (await response.json()) as BackendCollectionDto;
+      setCatalogCollections((prev) =>
+        sortCollections([savedCollection, ...prev.filter((item) => item.id !== savedCollection.id)])
+      );
+      setCollectionForm(emptyCollectionForm);
+      setMessageTone("success");
+      setMessage("Coleccion guardada correctamente.");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar la coleccion.");
+    } finally {
       setIsSavingCollection(false);
-      return;
     }
-    setMessage("Coleccion guardada correctamente.");
-    setCollectionForm(emptyCollectionForm);
-    setIsSavingCollection(false);
-    await router.replace(router.asPath);
   };
 
   const saveProduct = async (): Promise<void> => {
@@ -206,22 +423,32 @@ export default function AdminPage({
       : "/api/admin/products";
     const method = productForm.id ? "PUT" : "POST";
 
-    const response = await fetch(endpoint, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) {
-      const error = (await response.json()) as { message?: string; details?: string[] };
-      setMessage(`Error guardando producto: ${error.message ?? "desconocido"}`);
-      setIsSavingProduct(false);
-      return;
-    }
+    try {
+      const response = await fetch(endpoint, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
 
-    setMessage("Producto guardado correctamente.");
-    setProductForm(emptyProductForm);
-    setIsSavingProduct(false);
-    await router.replace(router.asPath);
+      if (!response.ok) {
+        setMessageTone("error");
+        setMessage(`Error guardando producto: ${await readResponseError(response)}`);
+        return;
+      }
+
+      const savedProduct = (await response.json()) as BackendProductDto;
+      setCatalogProducts((prev) =>
+        sortProducts([savedProduct, ...prev.filter((item) => item.id !== savedProduct.id)])
+      );
+      setProductForm(emptyProductForm);
+      setMessageTone("success");
+      setMessage("Producto guardado correctamente.");
+    } catch (error) {
+      setMessageTone("error");
+      setMessage(error instanceof Error ? error.message : "No se pudo guardar el producto.");
+    } finally {
+      setIsSavingProduct(false);
+    }
   };
 
   const logout = async (): Promise<void> => {
@@ -244,8 +471,8 @@ export default function AdminPage({
               Administracion de catalogo
             </h1>
             <p className="mt-3 max-w-3xl text-sm text-[#5b5249]">
-              Gestiona colecciones, productos, colores y talles. La desactivacion se
-              realiza marcando el producto o coleccion como inactivo.
+              Gestiona colecciones y remeras desde un solo panel. Ahora podes separar la
+              carga por seccion y adjuntar imagenes para guardarlas en el servidor.
             </p>
             {adminEmail ? (
               <p className="mt-3 text-xs uppercase tracking-[0.16em] text-[#7a7167]">
@@ -266,11 +493,41 @@ export default function AdminPage({
         {apiError ? (
           <p className="mt-4 text-sm text-[#9a3412]">Error API: {apiError}</p>
         ) : null}
-        {message ? <p className="mt-4 text-sm text-[#1d4d2e]">{message}</p> : null}
+        {message ? (
+          <p className={`mt-4 text-sm ${messageTone === "error" ? "text-[#9a3412]" : "text-[#1d4d2e]"}`}>
+            {message}
+          </p>
+        ) : null}
+
+        <div className="mt-8 flex flex-wrap gap-3">
+          <button
+            type="button"
+            className={`rounded-full px-5 py-2 text-xs uppercase tracking-[0.16em] transition-colors ${
+              activeTab === "collections"
+                ? "bg-[#1f1b16] text-white"
+                : "border border-[#cfc4b5] bg-white text-[#3c342d]"
+            }`}
+            onClick={() => void switchTab("collections")}
+          >
+            Colecciones
+          </button>
+          <button
+            type="button"
+            className={`rounded-full px-5 py-2 text-xs uppercase tracking-[0.16em] transition-colors ${
+              activeTab === "products"
+                ? "bg-[#1f1b16] text-white"
+                : "border border-[#cfc4b5] bg-white text-[#3c342d]"
+            }`}
+            onClick={() => void switchTab("products")}
+          >
+            Remeras
+          </button>
+        </div>
       </section>
 
-      <section className="mx-auto grid max-w-[1400px] gap-8 px-5 pb-20 md:px-8 lg:grid-cols-2">
-        <article className="rounded-2xl border border-[#ddd4c8] bg-white p-5">
+      <section className="mx-auto grid max-w-[1040px] gap-8 px-5 pb-20 md:px-8">
+        {activeTab === "collections" ? (
+          <article className="rounded-2xl border border-[#ddd4c8] bg-white p-5">
           <div className="mb-4 flex items-center justify-between">
             <h2 className="font-display text-3xl">Colecciones</h2>
             <button
@@ -283,7 +540,7 @@ export default function AdminPage({
           </div>
 
           <div className="mb-5 max-h-56 overflow-auto rounded-xl border border-[#ece4d8]">
-            {collections.map((collection) => (
+            {catalogCollections.map((collection) => (
               <button
                 key={collection.id}
                 type="button"
@@ -321,6 +578,10 @@ export default function AdminPage({
             <p className="text-xs text-[#766d63]">
               Nombre visible para cliente y para seleccionar en productos.
             </p>
+            <p className="text-xs text-[#9a3412]">
+              Si la coleccion ya tiene productos asociados, cambiar el nombre no actualiza
+              automaticamente las remeras existentes.
+            </p>
             <input
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               placeholder="Color HEX"
@@ -332,6 +593,30 @@ export default function AdminPage({
             <p className="text-xs text-[#766d63]">
               Color principal de la coleccion en formato HEX. Ejemplo: <code>#2f4f77</code>.
             </p>
+            {collectionForm.coverImageUrl ? (
+              <div className="relative aspect-[4/5] overflow-hidden rounded-xl border border-[#ece4d8] bg-[#f7f4ef]">
+                <Image
+                  src={collectionForm.coverImageUrl}
+                  alt={collectionForm.name || "Portada de coleccion"}
+                  fill
+                  sizes="(max-width: 1024px) 100vw, 420px"
+                  className="object-cover"
+                />
+              </div>
+            ) : null}
+            <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-[#cfc4b5] px-4 py-3 text-sm text-[#3c342d] transition-colors hover:bg-[#faf7f2]">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={(event) => void handleCollectionCoverUpload(event)}
+              />
+              {isUploadingCollectionCover ? "Subiendo portada..." : "Adjuntar portada desde tu compu"}
+            </label>
+            <p className="text-xs text-[#766d63]">
+              La imagen se guarda en el servidor. Si completas el slug antes de subirla, se
+              organiza dentro de la carpeta de esa coleccion.
+            </p>
             <input
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               placeholder="URL imagen portada"
@@ -341,7 +626,7 @@ export default function AdminPage({
               }
             />
             <p className="text-xs text-[#766d63]">
-              URL publica de imagen que se usara como portada de coleccion.
+              Ruta publica de la imagen portada. Tambien podes pegar una URL externa si hace falta.
             </p>
             <textarea
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
@@ -383,37 +668,45 @@ export default function AdminPage({
               {isSavingCollection ? "Guardando..." : collectionForm.id ? "Actualizar coleccion" : "Crear coleccion"}
             </button>
           </div>
-        </article>
+          </article>
+        ) : null}
 
-        <article className="rounded-2xl border border-[#ddd4c8] bg-white p-5">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-display text-3xl">Productos</h2>
-            <button
-              type="button"
-              className="rounded-full border border-[#2d261f] px-4 py-1 text-xs uppercase tracking-[0.13em]"
-              onClick={() => setProductForm(emptyProductForm)}
-            >
-              Nuevo
-            </button>
-          </div>
-
-          <div className="mb-5 max-h-56 overflow-auto rounded-xl border border-[#ece4d8]">
-            {products.map((product) => (
+        {activeTab === "products" ? (
+          <article className="rounded-2xl border border-[#ddd4c8] bg-white p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-3xl">Remeras</h2>
               <button
-                key={product.id}
                 type="button"
-                className="flex w-full items-center justify-between border-b border-[#f4eee3] px-3 py-2 text-left text-sm hover:bg-[#faf7f2]"
-                onClick={() => setProductForm(mapProductToForm(product))}
+                className="rounded-full border border-[#2d261f] px-4 py-1 text-xs uppercase tracking-[0.13em]"
+                onClick={() => setProductForm(emptyProductForm)}
               >
-                <span>{product.name}</span>
-                <span className={product.isActive ? "text-[#166534]" : "text-[#991b1b]"}>
-                  {product.isActive ? "Activo" : "Inactivo"}
-                </span>
+                Nuevo
               </button>
-            ))}
-          </div>
+            </div>
 
-          <div className="grid gap-3">
+            {collectionOptions.length === 0 ? (
+              <p className="mb-4 rounded-xl border border-[#f3d1bf] bg-[#fff4ed] px-4 py-3 text-sm text-[#9a3412]">
+                Primero crea una coleccion para poder asociar nuevas remeras.
+              </p>
+            ) : null}
+
+            <div className="mb-5 max-h-56 overflow-auto rounded-xl border border-[#ece4d8]">
+              {catalogProducts.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  className="flex w-full items-center justify-between border-b border-[#f4eee3] px-3 py-2 text-left text-sm hover:bg-[#faf7f2]"
+                  onClick={() => setProductForm(mapProductToForm(product))}
+                >
+                  <span>{product.name}</span>
+                  <span className={product.isActive ? "text-[#166534]" : "text-[#991b1b]"}>
+                    {product.isActive ? "Activo" : "Inactivo"}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3">
             <input
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               placeholder="Slug"
@@ -561,16 +854,79 @@ export default function AdminPage({
             <p className="text-xs text-[#766d63]">
               Formato exacto: <code>Nombre|#hex</code> en cada linea.
             </p>
+            <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-[#cfc4b5] px-4 py-3 text-sm text-[#3c342d] transition-colors hover:bg-[#faf7f2]">
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                multiple
+                className="hidden"
+                onChange={(event) => void handleProductImagesUpload(event)}
+              />
+              {isUploadingProductImages ? "Subiendo imagenes..." : "Adjuntar imagenes desde tu compu"}
+            </label>
+            <p className="text-xs text-[#766d63]">
+              La primera imagen queda como portada, la segunda se usa para hover y el resto
+              arma la galeria del producto.
+            </p>
+            {productImages.length > 0 ? (
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {productImages.map((image, index) => (
+                  <div key={`${image}-${index}`} className="rounded-xl border border-[#ece4d8] bg-[#faf7f2] p-3">
+                    <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-[#f1ece4]">
+                      <Image
+                        src={image}
+                        alt={`Imagen ${index + 1} de ${productForm.name || "producto"}`}
+                        fill
+                        sizes="(max-width: 768px) 100vw, 33vw"
+                        className="object-cover"
+                      />
+                    </div>
+                    <p className="mt-3 text-xs uppercase tracking-[0.14em] text-[#7a7167]">
+                      {index === 0 ? "Portada" : index === 1 ? "Hover" : `Galeria ${index - 1}`}
+                    </p>
+                    <p className="mt-1 truncate text-xs text-[#5b5249]">{image}</p>
+                    <div className="mt-3 flex gap-2">
+                      <button
+                        type="button"
+                        className="rounded-full border border-[#d0c6b9] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#3c342d] disabled:opacity-40"
+                        onClick={() => moveProductImage(index, -1)}
+                        disabled={index === 0}
+                      >
+                        Subir
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-[#d0c6b9] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#3c342d] disabled:opacity-40"
+                        onClick={() => moveProductImage(index, 1)}
+                        disabled={index === productImages.length - 1}
+                      >
+                        Bajar
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-full border border-[#efc6bb] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#9a3412]"
+                        onClick={() => removeProductImage(index)}
+                      >
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <textarea
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               placeholder={"Imagenes (URL por linea)"}
-              rows={3}
+              rows={4}
               value={productForm.imagesText}
               onChange={(event) =>
                 setProductForm((prev) => ({ ...prev, imagesText: event.target.value }))
               }
             />
-            <p className="text-xs text-[#766d63]">Una URL por linea. La primera sera imagen principal.</p>
+            <p className="text-xs text-[#766d63]">
+              Las rutas cargadas quedan disponibles para ajuste manual si necesitas pegar una
+              URL externa o reordenarlas directo como texto.
+            </p>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"
@@ -585,12 +941,13 @@ export default function AdminPage({
               type="button"
               className="rounded-lg bg-[#1f1b16] px-4 py-2 text-sm text-white disabled:opacity-70"
               onClick={saveProduct}
-              disabled={isSavingProduct}
+              disabled={isSavingProduct || collectionOptions.length === 0}
             >
               {isSavingProduct ? "Guardando..." : productForm.id ? "Actualizar producto" : "Crear producto"}
             </button>
-          </div>
-        </article>
+            </div>
+          </article>
+        ) : null}
       </section>
     </main>
   );

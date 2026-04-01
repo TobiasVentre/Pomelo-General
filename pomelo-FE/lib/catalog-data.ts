@@ -72,6 +72,10 @@ function normalizeCatalogImage(url: string | undefined): string {
     return DEFAULT_IMAGE;
   }
 
+  if (url.startsWith("/")) {
+    return url;
+  }
+
   try {
     const parsedUrl = new URL(url);
     if (parsedUrl.hostname === "example.com") {

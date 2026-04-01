@@ -10,6 +10,8 @@
 **/dist/
 **/coverage/
 **/*.tsbuildinfo
+pomelo-FE/public/uploads/*
+!pomelo-FE/public/uploads/.gitkeep
 
 # .NET
 **/bin/
