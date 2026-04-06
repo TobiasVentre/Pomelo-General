@@ -11,19 +11,45 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
   private async replaceProductDetails(
     connection: PoolConnection,
     productId: string,
-    colors: Product["availableColors"],
-    sizes: string[],
-    images: string[]
+    variants: Product["variants"],
+    sizes: string[]
   ): Promise<void> {
+    await connection.execute(
+      `DELETE pvi FROM product_variant_images pvi
+       INNER JOIN product_variants pv ON pv.id = pvi.product_variant_id
+       WHERE pv.product_id = ?`,
+      [productId]
+    );
+    await connection.execute("DELETE FROM product_variants WHERE product_id = ?", [productId]);
     await connection.execute("DELETE FROM product_colors WHERE product_id = ?", [productId]);
     await connection.execute("DELETE FROM product_sizes WHERE product_id = ?", [productId]);
     await connection.execute("DELETE FROM product_images WHERE product_id = ?", [productId]);
 
-    for (const color of colors) {
+    for (let index = 0; index < variants.length; index += 1) {
+      const variant = variants[index];
+      const variantId = randomUUID();
+
       await connection.execute(
-        "INSERT INTO product_colors (id, product_id, name, hex) VALUES (?, ?, ?, ?)",
-        [randomUUID(), productId, color.name, color.hex]
+        `INSERT INTO product_variants (
+          id, product_id, fabric_color_name, fabric_color_hex, print_color_name, print_color_hex, sort_order
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          variantId,
+          productId,
+          variant.fabricColor.name,
+          variant.fabricColor.hex,
+          variant.printColor.name,
+          variant.printColor.hex,
+          index + 1
+        ]
       );
+
+      for (let imageIndex = 0; imageIndex < variant.images.length; imageIndex += 1) {
+        await connection.execute(
+          "INSERT INTO product_variant_images (id, product_variant_id, url, sort_order) VALUES (?, ?, ?, ?)",
+          [randomUUID(), variantId, variant.images[imageIndex], imageIndex + 1]
+        );
+      }
     }
 
     for (const size of sizes) {
@@ -32,23 +58,14 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
         [randomUUID(), productId, size]
       );
     }
-
-    for (let index = 0; index < images.length; index += 1) {
-      const type = index === 0 ? "thumbnail" : index === 1 ? "hover" : "gallery";
-      await connection.execute(
-        "INSERT INTO product_images (id, product_id, type, url, sort_order) VALUES (?, ?, ?, ?, ?)",
-        [randomUUID(), productId, type, images[index], index + 1]
-      );
-    }
   }
 
   async execute(command: CreateProductCommand): Promise<Product> {
     const id = randomUUID();
     const connection = await this.mysqlClient.getPool().getConnection();
 
-    const colors = command.availableColors ?? [];
+    const variants = command.variants;
     const sizes = command.availableSizes ?? [];
-    const images = command.images ?? [];
 
     const sql = `
       INSERT INTO products (
@@ -75,7 +92,7 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
         command.isActive ? 1 : 0
       ]);
 
-      await this.replaceProductDetails(connection, id, colors, sizes, images);
+      await this.replaceProductDetails(connection, id, variants, sizes);
       await connection.commit();
     } catch (error) {
       await connection.rollback();
@@ -95,9 +112,8 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
       description: command.description,
       subtitle: command.subtitle,
       rating: command.rating,
-      availableColors: colors,
+      variants,
       availableSizes: sizes,
-      images,
       shippingInfo: command.shippingInfo,
       fabricCare: command.fabricCare,
       isActive: command.isActive

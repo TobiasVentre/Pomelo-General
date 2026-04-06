@@ -18,7 +18,8 @@ export interface CartItem {
   slug: string;
   name: string;
   priceArs: number;
-  color: string;
+  fabricColor: string;
+  printColor: string;
   size: string;
   image: string;
   quantity: number;
@@ -42,6 +43,57 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
+function readString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0 ? value : null;
+}
+
+function normalizeStoredCartItem(value: unknown): CartItem | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  const item = value as Record<string, unknown>;
+  const legacyColor = readString(item.color);
+  const fabricColor = readString(item.fabricColor) ?? legacyColor;
+  const printColor = readString(item.printColor) ?? legacyColor;
+  const productId = readString(item.productId);
+  const slug = readString(item.slug);
+  const name = readString(item.name);
+  const size = readString(item.size);
+  const image = readString(item.image);
+  const key = readString(item.key);
+  const priceArs = typeof item.priceArs === "number" ? item.priceArs : null;
+  const quantity = typeof item.quantity === "number" ? item.quantity : null;
+
+  if (
+    !productId ||
+    !slug ||
+    !name ||
+    !fabricColor ||
+    !printColor ||
+    !size ||
+    !image ||
+    !key ||
+    priceArs === null ||
+    quantity === null
+  ) {
+    return null;
+  }
+
+  return {
+    key,
+    productId,
+    slug,
+    name,
+    priceArs,
+    fabricColor,
+    printColor,
+    size,
+    image,
+    quantity
+  };
+}
+
 export function CartProvider({ children }: { children: ReactNode }): JSX.Element {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -55,9 +107,9 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
       return;
     }
     try {
-      const parsed = JSON.parse(raw) as CartItem[];
+      const parsed = JSON.parse(raw) as unknown;
       if (Array.isArray(parsed)) {
-        setItems(parsed);
+        setItems(parsed.map((item) => normalizeStoredCartItem(item)).filter((item): item is CartItem => item !== null));
       }
     } catch {
       setItems([]);
@@ -83,7 +135,7 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
   );
 
   const addItem = (item: Omit<CartItem, "key" | "quantity">): void => {
-    const key = `${item.productId}-${item.color}-${item.size}`;
+    const key = `${item.productId}-${item.fabricColor}-${item.printColor}-${item.size}`;
     setItems((prev) => {
       const found = prev.find((current) => current.key === key);
       if (found) {
@@ -127,7 +179,7 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
 
     const lines = items.map(
       (item) =>
-        `- ${item.name} | Color: ${item.color} | Talle: ${item.size} | Cantidad: ${item.quantity} | Subtotal: ${formatArs(item.priceArs * item.quantity)}`
+        `- ${item.name} | Tela: ${item.fabricColor} | Estampa: ${item.printColor} | Talle: ${item.size} | Cantidad: ${item.quantity} | Subtotal: ${formatArs(item.priceArs * item.quantity)}`
     );
     const message = [
       "Hola! Quiero realizar este pedido:",

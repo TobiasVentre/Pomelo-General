@@ -15,6 +15,12 @@ export interface ProductColor {
   hex: string;
 }
 
+export interface ProductVariant {
+  fabricColor: ProductColor;
+  printColor: ProductColor;
+  images: string[];
+}
+
 export interface ProductItem {
   id: string;
   slug: string;
@@ -24,6 +30,9 @@ export interface ProductItem {
   priceArs: number;
   description: string;
   subtitle: string;
+  variants: ProductVariant[];
+  availableFabricColors: ProductColor[];
+  availablePrintColors: ProductColor[];
   availableColors: ProductColor[];
   availableSizes: string[];
   rating: number;
@@ -56,9 +65,8 @@ export interface BackendProductDto {
   description: string;
   subtitle: string;
   rating: number;
-  availableColors: ProductColor[];
+  variants: ProductVariant[];
   availableSizes: string[];
-  images: string[];
   shippingInfo: string;
   fabricCare: string;
   isActive: boolean;
@@ -88,6 +96,64 @@ function normalizeCatalogImage(url: string | undefined): string {
   }
 }
 
+function buildGalleryImages(images: string[]): string[] {
+  return [
+    images[0] ?? DEFAULT_IMAGE,
+    images[1] ?? images[0] ?? DEFAULT_IMAGE,
+    images[2] ?? images[1] ?? images[0] ?? DEFAULT_IMAGE
+  ];
+}
+
+function buildUniqueColors(colors: ProductColor[]): ProductColor[] {
+  const seen = new Set<string>();
+
+  return colors.filter((color) => {
+    const key = `${color.name.trim().toLowerCase()}|${color.hex.trim().toLowerCase()}`;
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function normalizeProductVariants(product: BackendProductDto): ProductVariant[] {
+  const incomingVariants = Array.isArray(product.variants) ? product.variants : [];
+  const normalizedVariants = incomingVariants
+    .filter(
+      (variant) =>
+        variant &&
+        typeof variant.fabricColor?.name === "string" &&
+        typeof variant.fabricColor?.hex === "string" &&
+        typeof variant.printColor?.name === "string" &&
+        typeof variant.printColor?.hex === "string"
+    )
+    .map((variant) => ({
+      fabricColor: variant.fabricColor,
+      printColor: variant.printColor,
+      images: Array.isArray(variant.images)
+        ? variant.images
+            .filter((url) => typeof url === "string" && url.length > 0)
+            .map((url) => normalizeCatalogImage(url))
+        : []
+    }));
+
+  if (normalizedVariants.length > 0) {
+    return normalizedVariants;
+  }
+
+  const fallbackHex = product.collection === "Azul" ? "#2f4f77" : "#b9a798";
+
+  return [
+    {
+      fabricColor: { name: product.collection, hex: fallbackHex },
+      printColor: { name: product.collection, hex: fallbackHex },
+      images: [DEFAULT_IMAGE]
+    }
+  ];
+}
+
 export interface NavLinkItem {
   label: string;
   href: string;
@@ -105,19 +171,11 @@ export function mapBackendProductToUi(
   product: BackendProductDto,
   index = 0
 ): ProductItem {
-  const incomingImages = Array.isArray(product.images)
-    ? product.images
-        .filter((url) => typeof url === "string" && url.length > 0)
-        .map((url) => normalizeCatalogImage(url))
-    : [];
-
-  const galleryImages = [
-    incomingImages[0] ?? DEFAULT_IMAGE,
-    incomingImages[1] ?? incomingImages[0] ?? DEFAULT_IMAGE,
-    incomingImages[2] ?? incomingImages[1] ?? incomingImages[0] ?? DEFAULT_IMAGE
-  ];
-
-  const fallbackHex = product.collection === "Azul" ? "#2f4f77" : "#b9a798";
+  const variants = normalizeProductVariants(product);
+  const defaultVariant = variants[0];
+  const galleryImages = buildGalleryImages(defaultVariant?.images ?? []);
+  const availableFabricColors = buildUniqueColors(variants.map((variant) => variant.fabricColor));
+  const availablePrintColors = buildUniqueColors(variants.map((variant) => variant.printColor));
 
   return {
     id: product.id,
@@ -128,10 +186,10 @@ export function mapBackendProductToUi(
     priceArs: product.priceArs,
     description: product.description,
     subtitle: product.subtitle,
-    availableColors:
-      product.availableColors?.length > 0
-        ? product.availableColors
-        : [{ name: product.collection, hex: fallbackHex }],
+    variants,
+    availableFabricColors,
+    availablePrintColors,
+    availableColors: availableFabricColors,
     availableSizes:
       product.availableSizes?.length > 0 ? product.availableSizes : ["S", "M", "L"],
     rating: product.rating ?? 0,

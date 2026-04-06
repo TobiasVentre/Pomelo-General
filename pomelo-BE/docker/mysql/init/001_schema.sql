@@ -54,6 +54,32 @@ CREATE TABLE IF NOT EXISTS product_images (
   FOREIGN KEY (product_id) REFERENCES products(id)
 );
 
+CREATE TABLE IF NOT EXISTS product_variants (
+  id CHAR(36) PRIMARY KEY,
+  product_id CHAR(36) NOT NULL,
+  fabric_color_name VARCHAR(80) NOT NULL,
+  fabric_color_hex VARCHAR(20) NOT NULL,
+  print_color_name VARCHAR(80) NOT NULL,
+  print_color_hex VARCHAR(20) NOT NULL,
+  sort_order INT NOT NULL DEFAULT 1,
+  UNIQUE KEY uq_product_variant_combination (
+    product_id,
+    fabric_color_name,
+    fabric_color_hex,
+    print_color_name,
+    print_color_hex
+  ),
+  FOREIGN KEY (product_id) REFERENCES products(id)
+);
+
+CREATE TABLE IF NOT EXISTS product_variant_images (
+  id CHAR(36) PRIMARY KEY,
+  product_variant_id CHAR(36) NOT NULL,
+  url TEXT NOT NULL,
+  sort_order INT NOT NULL DEFAULT 1,
+  FOREIGN KEY (product_variant_id) REFERENCES product_variants(id)
+);
+
 INSERT INTO products (
   id, slug, sku, name, category, collection, price_ars, description, subtitle,
   rating, shipping_info, fabric_care, is_active, display_order, created_at, updated_at
@@ -92,6 +118,27 @@ INSERT INTO product_images (id, product_id, type, url, sort_order) VALUES
   ('81111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'hover', 'https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=900&q=80', 2),
   ('91111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'gallery', 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80', 3)
 ON DUPLICATE KEY UPDATE url = VALUES(url);
+
+INSERT INTO product_variants (
+  id, product_id, fabric_color_name, fabric_color_hex, print_color_name, print_color_hex, sort_order
+) VALUES
+  ('a1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Marfil', '#efe9df', 'Negra', '#1f1b16', 1),
+  ('b1111111-1111-1111-1111-111111111111', '11111111-1111-1111-1111-111111111111', 'Arena', '#d8d1c4', 'Terracota', '#b35c37', 2)
+ON DUPLICATE KEY UPDATE
+  fabric_color_name = VALUES(fabric_color_name),
+  fabric_color_hex = VALUES(fabric_color_hex),
+  print_color_name = VALUES(print_color_name),
+  print_color_hex = VALUES(print_color_hex),
+  sort_order = VALUES(sort_order);
+
+INSERT INTO product_variant_images (id, product_variant_id, url, sort_order) VALUES
+  ('c1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=900&q=80', 1),
+  ('d1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=900&q=80', 2),
+  ('e1111111-1111-1111-1111-111111111111', 'a1111111-1111-1111-1111-111111111111', 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=80', 3),
+  ('f1111111-1111-1111-1111-111111111111', 'b1111111-1111-1111-1111-111111111111', 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=900&q=80', 1),
+  ('g1111111-1111-1111-1111-111111111111', 'b1111111-1111-1111-1111-111111111111', 'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=900&q=80', 2),
+  ('h1111111-1111-1111-1111-111111111111', 'b1111111-1111-1111-1111-111111111111', 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?auto=format&fit=crop&w=900&q=80', 3)
+ON DUPLICATE KEY UPDATE url = VALUES(url), sort_order = VALUES(sort_order);
 
 INSERT INTO collections (
   id, slug, name, color_hex, cover_image_url, description, is_active, display_order, created_at, updated_at

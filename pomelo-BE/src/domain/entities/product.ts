@@ -3,6 +3,12 @@ export interface ProductColor {
   hex: string;
 }
 
+export interface ProductVariant {
+  fabricColor: ProductColor;
+  printColor: ProductColor;
+  images: string[];
+}
+
 export interface Product {
   id: string;
   slug: string;
@@ -14,9 +20,8 @@ export interface Product {
   description: string;
   subtitle: string;
   rating: number;
-  availableColors: ProductColor[];
+  variants: ProductVariant[];
   availableSizes: string[];
-  images: string[];
   shippingInfo: string;
   fabricCare: string;
   isActive: boolean;

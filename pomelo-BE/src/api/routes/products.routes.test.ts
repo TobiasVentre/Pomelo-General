@@ -16,9 +16,14 @@ test("validateProductPayload should accept valid payload", () => {
     shippingInfo: "Envio",
     fabricCare: "Algodon",
     isActive: true,
-    availableColors: [{ name: "Azul", hex: "#2f4f77" }],
+    variants: [
+      {
+        fabricColor: { name: "Azul", hex: "#2f4f77" },
+        printColor: { name: "Blanco", hex: "#ffffff" },
+        images: ["https://example.com/1.jpg"]
+      }
+    ],
     availableSizes: ["S", "M"],
-    images: ["https://example.com/1.jpg"]
   });
 
   assert.equal(result.errors.length, 0);
@@ -31,5 +36,37 @@ test("validateProductPayload should reject missing required fields", () => {
   });
 
   assert.ok(result.errors.length > 0);
+  assert.equal(result.normalized, null);
+});
+
+test("validateProductPayload should reject duplicated variants", () => {
+  const result = validateProductPayload({
+    slug: "remera-test",
+    sku: "REM-001",
+    name: "Remera Test",
+    category: "Remeras",
+    collection: "Azul",
+    priceArs: 45000,
+    description: "Desc",
+    subtitle: "Sub",
+    rating: 4,
+    shippingInfo: "Envio",
+    fabricCare: "Algodon",
+    isActive: true,
+    variants: [
+      {
+        fabricColor: { name: "Azul", hex: "#2f4f77" },
+        printColor: { name: "Blanco", hex: "#ffffff" },
+        images: ["https://example.com/1.jpg"]
+      },
+      {
+        fabricColor: { name: "Azul", hex: "#2f4f77" },
+        printColor: { name: "Blanco", hex: "#ffffff" },
+        images: ["https://example.com/2.jpg"]
+      }
+    ]
+  });
+
+  assert.ok(result.errors.some((error) => error.includes("duplicated tela + estampa")));
   assert.equal(result.normalized, null);
 });

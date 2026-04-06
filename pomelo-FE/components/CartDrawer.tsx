@@ -62,7 +62,7 @@ export default function CartDrawer(): JSX.Element {
                 <div className="flex-1">
                   <h3 className="text-sm">{item.name}</h3>
                   <p className="mt-1 text-xs text-[#6a6158]">
-                    {item.color} / {item.size}
+                    Tela: {item.fabricColor} | Estampa: {item.printColor} | Talle: {item.size}
                   </p>
                   <p className="mt-1 text-sm">{formatArs(item.priceArs)}</p>
                   <div className="mt-2 inline-flex items-center border border-black/20">

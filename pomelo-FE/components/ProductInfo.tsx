@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { formatArs, type ProductItem } from "../lib/catalog-data";
+import { formatArs, type ProductColor, type ProductItem } from "../lib/catalog-data";
 import { useCart } from "../context/cart-context";
 import AddToBagButton from "./AddToBagButton";
 import ColorSwatches from "./ColorSwatches";
@@ -7,16 +7,35 @@ import SizeSelector from "./SizeSelector";
 
 interface ProductInfoProps {
   product: ProductItem;
+  availableFabricColors: ProductColor[];
+  availablePrintColors: ProductColor[];
+  selectedFabricColor: string;
+  selectedPrintColor: string;
+  onSelectFabricColor: (name: string) => void;
+  onSelectPrintColor: (name: string) => void;
+  activeImage: string;
 }
 
-export default function ProductInfo({ product }: ProductInfoProps): JSX.Element {
+export default function ProductInfo({
+  product,
+  availableFabricColors,
+  availablePrintColors,
+  selectedFabricColor,
+  selectedPrintColor,
+  onSelectFabricColor,
+  onSelectPrintColor,
+  activeImage
+}: ProductInfoProps): JSX.Element {
   const { addItem } = useCart();
-  const [selectedColor, setSelectedColor] = useState(product.availableColors[0]?.name ?? "");
   const [selectedSize, setSelectedSize] = useState(product.availableSizes[0] ?? "");
 
-  const selectedColorHex = useMemo(
-    () => product.availableColors.find((color) => color.name === selectedColor)?.hex,
-    [product.availableColors, selectedColor]
+  const selectedFabricColorHex = useMemo(
+    () => availableFabricColors.find((color) => color.name === selectedFabricColor)?.hex,
+    [availableFabricColors, selectedFabricColor]
+  );
+  const selectedPrintColorHex = useMemo(
+    () => availablePrintColors.find((color) => color.name === selectedPrintColor)?.hex,
+    [availablePrintColors, selectedPrintColor]
   );
 
   return (
@@ -31,15 +50,29 @@ export default function ProductInfo({ product }: ProductInfoProps): JSX.Element 
 
       <div className="mt-7 space-y-3">
         <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
-          Color: {selectedColor}
+          Color de tela: {selectedFabricColor}
         </p>
         <ColorSwatches
-          colors={product.availableColors}
-          selected={selectedColor}
-          onSelect={setSelectedColor}
+          colors={availableFabricColors}
+          selected={selectedFabricColor}
+          onSelect={onSelectFabricColor}
         />
-        {selectedColorHex ? (
-          <p className="text-xs text-[#6a6158]">Muestra: {selectedColorHex}</p>
+        {selectedFabricColorHex ? (
+          <p className="text-xs text-[#6a6158]">Muestra tela: {selectedFabricColorHex}</p>
+        ) : null}
+      </div>
+
+      <div className="mt-7 space-y-3">
+        <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
+          Color de estampa: {selectedPrintColor}
+        </p>
+        <ColorSwatches
+          colors={availablePrintColors}
+          selected={selectedPrintColor}
+          onSelect={onSelectPrintColor}
+        />
+        {selectedPrintColorHex ? (
+          <p className="text-xs text-[#6a6158]">Muestra estampa: {selectedPrintColorHex}</p>
         ) : null}
       </div>
 
@@ -62,9 +95,10 @@ export default function ProductInfo({ product }: ProductInfoProps): JSX.Element 
               slug: product.slug,
               name: product.name,
               priceArs: product.priceArs,
-              color: selectedColor,
+              fabricColor: selectedFabricColor,
+              printColor: selectedPrintColor,
               size: selectedSize,
-              image: product.thumbnail
+              image: activeImage
             })
           }
         />

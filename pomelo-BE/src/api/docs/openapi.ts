@@ -408,6 +408,15 @@ export const openApiSpec = {
           hex: { type: "string" }
         }
       },
+      ProductVariant: {
+        type: "object",
+        required: ["fabricColor", "printColor", "images"],
+        properties: {
+          fabricColor: { $ref: "#/components/schemas/ProductColor" },
+          printColor: { $ref: "#/components/schemas/ProductColor" },
+          images: { type: "array", items: { type: "string" } }
+        }
+      },
       Collection: {
         type: "object",
         properties: {
@@ -437,12 +446,11 @@ export const openApiSpec = {
           shippingInfo: { type: "string" },
           fabricCare: { type: "string" },
           isActive: { type: "boolean" },
-          availableColors: {
+          variants: {
             type: "array",
-            items: { $ref: "#/components/schemas/ProductColor" }
+            items: { $ref: "#/components/schemas/ProductVariant" }
           },
-          availableSizes: { type: "array", items: { type: "string" } },
-          images: { type: "array", items: { type: "string" } }
+          availableSizes: { type: "array", items: { type: "string" } }
         }
       },
       CreateCollectionRequest: {
@@ -480,7 +488,8 @@ export const openApiSpec = {
           "rating",
           "shippingInfo",
           "fabricCare",
-          "isActive"
+          "isActive",
+          "variants"
         ],
         properties: {
           slug: { type: "string" },
@@ -495,12 +504,11 @@ export const openApiSpec = {
           shippingInfo: { type: "string" },
           fabricCare: { type: "string" },
           isActive: { type: "boolean" },
-          availableColors: {
+          variants: {
             type: "array",
-            items: { $ref: "#/components/schemas/ProductColor" }
+            items: { $ref: "#/components/schemas/ProductVariant" }
           },
-          availableSizes: { type: "array", items: { type: "string" } },
-          images: { type: "array", items: { type: "string" } }
+          availableSizes: { type: "array", items: { type: "string" } }
         }
       },
       ShippingQuoteRequest: {

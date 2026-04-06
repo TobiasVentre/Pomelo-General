@@ -5,7 +5,7 @@ import { type ChangeEvent, useState } from "react";
 import Navbar from "../../components/Navbar";
 import { resolveAdminSession } from "../../lib/admin-session";
 import { getBackendApiBase } from "../../lib/backend-api";
-import type { BackendCollectionDto, BackendProductDto } from "../../lib/catalog-data";
+import type { BackendCollectionDto, BackendProductDto, ProductVariant } from "../../lib/catalog-data";
 
 interface AdminPageProps {
   products: BackendProductDto[];
@@ -40,7 +40,15 @@ interface ProductFormState {
   fabricCare: string;
   isActive: boolean;
   availableSizesText: string;
-  availableColorsText: string;
+  variants: ProductVariantFormState[];
+}
+
+interface ProductVariantFormState {
+  key: string;
+  fabricColorName: string;
+  fabricColorHex: string;
+  printColorName: string;
+  printColorHex: string;
   imagesText: string;
 }
 
@@ -55,24 +63,39 @@ const emptyCollectionForm: CollectionFormState = {
   displayOrder: "100"
 };
 
-const emptyProductForm: ProductFormState = {
-  id: "",
-  slug: "",
-  sku: "",
-  name: "",
-  category: "Remeras",
-  collection: "",
-  priceArs: "",
-  subtitle: "",
-  description: "",
-  rating: "4.5",
-  shippingInfo: "Envio a todo el pais",
-  fabricCare: "100% algodon",
-  isActive: true,
-  availableSizesText: "S\nM\nL",
-  availableColorsText: "",
-  imagesText: ""
-};
+function createVariantFormState(
+  overrides: Partial<Omit<ProductVariantFormState, "key">> = {}
+): ProductVariantFormState {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+    fabricColorName: "",
+    fabricColorHex: "#000000",
+    printColorName: "",
+    printColorHex: "#000000",
+    imagesText: "",
+    ...overrides
+  };
+}
+
+function createEmptyProductForm(): ProductFormState {
+  return {
+    id: "",
+    slug: "",
+    sku: "",
+    name: "",
+    category: "Remeras",
+    collection: "",
+    priceArs: "",
+    subtitle: "",
+    description: "",
+    rating: "4.5",
+    shippingInfo: "Envio a todo el pais",
+    fabricCare: "100% algodon",
+    isActive: true,
+    availableSizesText: "S\nM\nL",
+    variants: [createVariantFormState()]
+  };
+}
 
 const productCategoryOptions = ["Remeras"];
 
@@ -152,16 +175,188 @@ function splitLines(value: string): string[] {
     .filter((item) => item.length > 0);
 }
 
-function parseColorLines(value: string): Array<{ name: string; hex: string }> {
-  return splitLines(value)
-    .map((line) => {
-      const [name, hex] = line.split("|").map((part) => part.trim());
-      if (!name || !hex) {
-        return null;
+function isBlankVariantForm(variant: ProductVariantFormState): boolean {
+  return (
+    variant.fabricColorName.trim() === "" &&
+    variant.fabricColorHex.trim() === "#000000" &&
+    variant.printColorName.trim() === "" &&
+    variant.printColorHex.trim() === "#000000" &&
+    splitLines(variant.imagesText).length === 0
+  );
+}
+
+function mapVariantFormToPayload(variant: ProductVariantFormState): ProductVariant {
+  return {
+    fabricColor: {
+      name: variant.fabricColorName.trim(),
+      hex: variant.fabricColorHex.trim()
+    },
+    printColor: {
+      name: variant.printColorName.trim(),
+      hex: variant.printColorHex.trim()
+    },
+    images: splitLines(variant.imagesText)
+  };
+}
+
+function normalizeSkuSegment(value: string, fallback: string): string {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "")
+    .toUpperCase();
+
+  if (normalized.length >= 3) {
+    return normalized.slice(0, 3);
+  }
+
+  if (normalized.length > 0) {
+    return normalized.padEnd(3, fallback[0] ?? "X");
+  }
+
+  return fallback;
+}
+
+function normalizeSlugSegment(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function buildSuggestedSku(input: {
+  category: string;
+  collectionName: string;
+  currentProductId: string;
+  products: BackendProductDto[];
+  collections: BackendCollectionDto[];
+}): string {
+  const category = input.category.trim();
+  const collectionName = input.collectionName.trim();
+
+  if (!category || !collectionName) {
+    return "";
+  }
+
+  const categoryPrefix = normalizeSkuSegment(category, "CAT");
+  const matchingCollection = input.collections.find((collection) => collection.name === collectionName);
+  const collectionSource = matchingCollection?.slug || matchingCollection?.name || collectionName;
+  const collectionPrefix = normalizeSkuSegment(collectionSource, "COL");
+  const prefix = `${categoryPrefix}-${collectionPrefix}`;
+  const relatedProducts = input.products.filter(
+    (product) =>
+      product.id !== input.currentProductId &&
+      product.category.trim() === category &&
+      product.collection.trim() === collectionName
+  );
+
+  const sequence = relatedProducts
+    .reduce((maxSequence, product) => {
+      const parsedSequence = Number.parseInt(product.sku.trim().match(/(\d+)$/)?.[1] ?? "", 10);
+
+      if (product.sku.trim().startsWith(`${prefix}-`) && Number.isFinite(parsedSequence)) {
+        return Math.max(maxSequence, parsedSequence);
       }
-      return { name, hex };
-    })
-    .filter((item): item is { name: string; hex: string } => item !== null);
+
+      return maxSequence;
+    }, relatedProducts.length);
+
+  return `${prefix}-${String(sequence + 1).padStart(3, "0")}`;
+}
+
+function buildSuggestedProductSlug(input: {
+  name: string;
+  collectionName: string;
+  currentProductId: string;
+  products: BackendProductDto[];
+  collections: BackendCollectionDto[];
+}): string {
+  const nameSegment = normalizeSlugSegment(input.name.trim());
+
+  if (!nameSegment) {
+    return "";
+  }
+
+  const matchingCollection = input.collections.find(
+    (collection) => collection.name === input.collectionName.trim()
+  );
+  const collectionSegment = normalizeSlugSegment(
+    matchingCollection?.slug || matchingCollection?.name || input.collectionName.trim()
+  );
+  const baseSlug = [nameSegment, collectionSegment].filter(Boolean).join("-");
+
+  if (!baseSlug) {
+    return "";
+  }
+
+  const usedSlugs = new Set(
+    input.products
+      .filter((product) => product.id !== input.currentProductId)
+      .map((product) => product.slug.trim())
+  );
+
+  if (!usedSlugs.has(baseSlug)) {
+    return baseSlug;
+  }
+
+  let sequence = 2;
+
+  while (usedSlugs.has(`${baseSlug}-${sequence}`)) {
+    sequence += 1;
+  }
+
+  return `${baseSlug}-${sequence}`;
+}
+
+function withSuggestedProductIdentifiers(
+  previous: ProductFormState,
+  next: ProductFormState,
+  products: BackendProductDto[],
+  collections: BackendCollectionDto[]
+): ProductFormState {
+  const previousSuggestedSku = buildSuggestedSku({
+    category: previous.category,
+    collectionName: previous.collection,
+    currentProductId: previous.id,
+    products,
+    collections
+  });
+  const nextSuggestedSku = buildSuggestedSku({
+    category: next.category,
+    collectionName: next.collection,
+    currentProductId: next.id,
+    products,
+    collections
+  });
+  const previousSuggestedSlug = buildSuggestedProductSlug({
+    name: previous.name,
+    collectionName: previous.collection,
+    currentProductId: previous.id,
+    products,
+    collections
+  });
+  const nextSuggestedSlug = buildSuggestedProductSlug({
+    name: next.name,
+    collectionName: next.collection,
+    currentProductId: next.id,
+    products,
+    collections
+  });
+
+  return {
+    ...next,
+    slug:
+      !previous.id && (previous.slug.trim() === "" || previous.slug === previousSuggestedSlug)
+        ? nextSuggestedSlug
+        : next.slug,
+    sku:
+      !previous.id && (previous.sku.trim() === "" || previous.sku === previousSuggestedSku)
+        ? nextSuggestedSku
+        : next.sku
+  };
 }
 
 function mapCollectionToForm(collection: BackendCollectionDto): CollectionFormState {
@@ -193,10 +388,18 @@ function mapProductToForm(product: BackendProductDto): ProductFormState {
     fabricCare: product.fabricCare,
     isActive: product.isActive,
     availableSizesText: product.availableSizes.join("\n"),
-    availableColorsText: product.availableColors
-      .map((color) => `${color.name}|${color.hex}`)
-      .join("\n"),
-    imagesText: product.images.join("\n")
+    variants:
+      product.variants.length > 0
+        ? product.variants.map((variant) =>
+            createVariantFormState({
+              fabricColorName: variant.fabricColor.name,
+              fabricColorHex: variant.fabricColor.hex,
+              printColorName: variant.printColor.name,
+              printColorHex: variant.printColor.hex,
+              imagesText: variant.images.join("\n")
+            })
+          )
+        : [createVariantFormState()]
   };
 }
 
@@ -218,7 +421,7 @@ export default function AdminPage({
     (left, right) => left.localeCompare(right)
   );
   const [collectionForm, setCollectionForm] = useState<CollectionFormState>(emptyCollectionForm);
-  const [productForm, setProductForm] = useState<ProductFormState>(emptyProductForm);
+  const [productForm, setProductForm] = useState<ProductFormState>(() => createEmptyProductForm());
   const [message, setMessage] = useState<string>("");
   const [messageTone, setMessageTone] = useState<MessageTone>("success");
   const [isSavingCollection, setIsSavingCollection] = useState(false);
@@ -226,7 +429,20 @@ export default function AdminPage({
   const [isUploadingCollectionCover, setIsUploadingCollectionCover] = useState(false);
   const [isUploadingProductImages, setIsUploadingProductImages] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const productImages = splitLines(productForm.imagesText);
+  const suggestedSlug = buildSuggestedProductSlug({
+    name: productForm.name,
+    collectionName: productForm.collection,
+    currentProductId: productForm.id,
+    products: catalogProducts,
+    collections: catalogCollections
+  });
+  const suggestedSku = buildSuggestedSku({
+    category: productForm.category,
+    collectionName: productForm.collection,
+    currentProductId: productForm.id,
+    products: catalogProducts,
+    collections: catalogCollections
+  });
 
   const switchTab = async (tab: AdminTab): Promise<void> => {
     if (tab === activeTab) {
@@ -303,7 +519,37 @@ export default function AdminPage({
     }
   };
 
-  const handleProductImagesUpload = async (
+  const updateProductVariant = (
+    variantIndex: number,
+    updater: (variant: ProductVariantFormState) => ProductVariantFormState
+  ): void => {
+    setProductForm((prev) => ({
+      ...prev,
+      variants: prev.variants.map((variant, index) =>
+        index === variantIndex ? updater(variant) : variant
+      )
+    }));
+  };
+
+  const addProductVariant = (): void => {
+    setProductForm((prev) => ({
+      ...prev,
+      variants: [...prev.variants, createVariantFormState()]
+    }));
+  };
+
+  const removeProductVariant = (variantIndex: number): void => {
+    setProductForm((prev) => ({
+      ...prev,
+      variants:
+        prev.variants.length > 1
+          ? prev.variants.filter((_, index) => index !== variantIndex)
+          : [createVariantFormState()]
+    }));
+  };
+
+  const handleVariantImagesUpload = async (
+    variantIndex: number,
     event: ChangeEvent<HTMLInputElement>
   ): Promise<void> => {
     const files = event.target.files;
@@ -322,12 +568,12 @@ export default function AdminPage({
         throw new Error("No se pudieron obtener las imagenes subidas");
       }
 
-      setProductForm((prev) => ({
-        ...prev,
-        imagesText: appendLines(prev.imagesText, uploadedUrls)
+      updateProductVariant(variantIndex, (variant) => ({
+        ...variant,
+        imagesText: appendLines(variant.imagesText, uploadedUrls)
       }));
       setMessageTone("success");
-      setMessage("Imagenes del producto cargadas correctamente.");
+      setMessage(`Imagenes de la variante ${variantIndex + 1} cargadas correctamente.`);
     } catch (error) {
       setMessageTone("error");
       setMessage(error instanceof Error ? error.message : "No se pudieron subir las imagenes.");
@@ -337,17 +583,17 @@ export default function AdminPage({
     }
   };
 
-  const moveProductImage = (index: number, direction: -1 | 1): void => {
-    setProductForm((prev) => ({
-      ...prev,
-      imagesText: moveLine(prev.imagesText, index, direction)
+  const moveVariantImage = (variantIndex: number, imageIndex: number, direction: -1 | 1): void => {
+    updateProductVariant(variantIndex, (variant) => ({
+      ...variant,
+      imagesText: moveLine(variant.imagesText, imageIndex, direction)
     }));
   };
 
-  const removeProductImage = (index: number): void => {
-    setProductForm((prev) => ({
-      ...prev,
-      imagesText: removeLineAt(prev.imagesText, index)
+  const removeVariantImage = (variantIndex: number, imageIndex: number): void => {
+    updateProductVariant(variantIndex, (variant) => ({
+      ...variant,
+      imagesText: removeLineAt(variant.imagesText, imageIndex)
     }));
   };
 
@@ -400,9 +646,11 @@ export default function AdminPage({
     setIsSavingProduct(true);
     setMessage("");
 
+    const resolvedSku = productForm.sku.trim() || suggestedSku;
+    const resolvedSlug = productForm.slug.trim() || suggestedSlug;
     const payload = {
-      slug: productForm.slug.trim(),
-      sku: productForm.sku.trim(),
+      slug: resolvedSlug,
+      sku: resolvedSku,
       name: productForm.name.trim(),
       category: productForm.category.trim(),
       collection: productForm.collection.trim(),
@@ -414,8 +662,9 @@ export default function AdminPage({
       fabricCare: productForm.fabricCare.trim(),
       isActive: productForm.isActive,
       availableSizes: splitLines(productForm.availableSizesText),
-      availableColors: parseColorLines(productForm.availableColorsText),
-      images: splitLines(productForm.imagesText)
+      variants: productForm.variants
+        .filter((variant) => !isBlankVariantForm(variant))
+        .map((variant) => mapVariantFormToPayload(variant))
     };
 
     const endpoint = productForm.id
@@ -440,7 +689,7 @@ export default function AdminPage({
       setCatalogProducts((prev) =>
         sortProducts([savedProduct, ...prev.filter((item) => item.id !== savedProduct.id)])
       );
-      setProductForm(emptyProductForm);
+      setProductForm(createEmptyProductForm());
       setMessageTone("success");
       setMessage("Producto guardado correctamente.");
     } catch (error) {
@@ -678,7 +927,7 @@ export default function AdminPage({
               <button
                 type="button"
                 className="rounded-full border border-[#2d261f] px-4 py-1 text-xs uppercase tracking-[0.13em]"
-                onClick={() => setProductForm(emptyProductForm)}
+                onClick={() => setProductForm(createEmptyProductForm())}
               >
                 Nuevo
               </button>
@@ -718,6 +967,11 @@ export default function AdminPage({
             <p className="text-xs text-[#766d63]">
               Identificador unico para URL. Ejemplo: <code>remera-basica-azul</code>.
             </p>
+            {suggestedSlug ? (
+              <p className="text-xs text-[#766d63]">
+                Sugerido: <code>{suggestedSlug}</code>
+              </p>
+            ) : null}
             <input
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               placeholder="SKU"
@@ -726,13 +980,28 @@ export default function AdminPage({
                 setProductForm((prev) => ({ ...prev, sku: event.target.value }))
               }
             />
-            <p className="text-xs text-[#766d63]">Codigo interno unico para gestionar el producto.</p>
+            <p className="text-xs text-[#766d63]">
+              Codigo interno unico. Si lo dejas vacio o todavia no lo tocaste, se genera
+              automaticamente con el formato <code>REM-AZU-001</code>.
+            </p>
+            {suggestedSku ? (
+              <p className="text-xs text-[#766d63]">
+                Sugerido: <code>{suggestedSku}</code>
+              </p>
+            ) : null}
             <input
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               placeholder="Nombre"
               value={productForm.name}
               onChange={(event) =>
-                setProductForm((prev) => ({ ...prev, name: event.target.value }))
+                setProductForm((prev) =>
+                  withSuggestedProductIdentifiers(
+                    prev,
+                    { ...prev, name: event.target.value },
+                    catalogProducts,
+                    catalogCollections
+                  )
+                )
               }
             />
             <p className="text-xs text-[#766d63]">Nombre comercial mostrado al cliente.</p>
@@ -740,7 +1009,14 @@ export default function AdminPage({
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               value={productForm.category}
               onChange={(event) =>
-                setProductForm((prev) => ({ ...prev, category: event.target.value }))
+                setProductForm((prev) =>
+                  withSuggestedProductIdentifiers(
+                    prev,
+                    { ...prev, category: event.target.value },
+                    catalogProducts,
+                    catalogCollections
+                  )
+                )
               }
             >
               {productCategoryOptions.map((category) => (
@@ -754,7 +1030,14 @@ export default function AdminPage({
               className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
               value={productForm.collection}
               onChange={(event) =>
-                setProductForm((prev) => ({ ...prev, collection: event.target.value }))
+                setProductForm((prev) =>
+                  withSuggestedProductIdentifiers(
+                    prev,
+                    { ...prev, collection: event.target.value },
+                    catalogProducts,
+                    catalogCollections
+                  )
+                )
               }
             >
               <option value="">Seleccionar coleccion</option>
@@ -839,94 +1122,216 @@ export default function AdminPage({
               }
             />
             <p className="text-xs text-[#766d63]">Un talle por linea. Ejemplo: S, M, L.</p>
-            <textarea
-              className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
-              placeholder={"Colores (Nombre|#hex por linea)\nBeige|#d5c6ac"}
-              rows={3}
-              value={productForm.availableColorsText}
-              onChange={(event) =>
-                setProductForm((prev) => ({
-                  ...prev,
-                  availableColorsText: event.target.value
-                }))
-              }
-            />
-            <p className="text-xs text-[#766d63]">
-              Formato exacto: <code>Nombre|#hex</code> en cada linea.
-            </p>
-            <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-[#cfc4b5] px-4 py-3 text-sm text-[#3c342d] transition-colors hover:bg-[#faf7f2]">
-              <input
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                multiple
-                className="hidden"
-                onChange={(event) => void handleProductImagesUpload(event)}
-              />
-              {isUploadingProductImages ? "Subiendo imagenes..." : "Adjuntar imagenes desde tu compu"}
-            </label>
-            <p className="text-xs text-[#766d63]">
-              La primera imagen queda como portada, la segunda se usa para hover y el resto
-              arma la galeria del producto.
-            </p>
-            {productImages.length > 0 ? (
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                {productImages.map((image, index) => (
-                  <div key={`${image}-${index}`} className="rounded-xl border border-[#ece4d8] bg-[#faf7f2] p-3">
-                    <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-[#f1ece4]">
-                      <Image
-                        src={image}
-                        alt={`Imagen ${index + 1} de ${productForm.name || "producto"}`}
-                        fill
-                        sizes="(max-width: 768px) 100vw, 33vw"
-                        className="object-cover"
-                      />
-                    </div>
-                    <p className="mt-3 text-xs uppercase tracking-[0.14em] text-[#7a7167]">
-                      {index === 0 ? "Portada" : index === 1 ? "Hover" : `Galeria ${index - 1}`}
-                    </p>
-                    <p className="mt-1 truncate text-xs text-[#5b5249]">{image}</p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        className="rounded-full border border-[#d0c6b9] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#3c342d] disabled:opacity-40"
-                        onClick={() => moveProductImage(index, -1)}
-                        disabled={index === 0}
-                      >
-                        Subir
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-[#d0c6b9] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#3c342d] disabled:opacity-40"
-                        onClick={() => moveProductImage(index, 1)}
-                        disabled={index === productImages.length - 1}
-                      >
-                        Bajar
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-full border border-[#efc6bb] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#9a3412]"
-                        onClick={() => removeProductImage(index)}
-                      >
-                        Quitar
-                      </button>
-                    </div>
-                  </div>
-                ))}
+            <div className="rounded-2xl border border-[#e5dbcf] bg-[#fcfaf7] p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-[#2b241d]">Variantes</p>
+                  <p className="mt-1 text-xs text-[#766d63]">
+                    Carga cada combinacion de tela y estampa por separado. Cada tarjeta tiene
+                    sus propias imagenes para la PDP.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-[#2d261f] px-4 py-2 text-xs uppercase tracking-[0.13em]"
+                  onClick={addProductVariant}
+                >
+                  Nueva variante
+                </button>
               </div>
-            ) : null}
-            <textarea
-              className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
-              placeholder={"Imagenes (URL por linea)"}
-              rows={4}
-              value={productForm.imagesText}
-              onChange={(event) =>
-                setProductForm((prev) => ({ ...prev, imagesText: event.target.value }))
-              }
-            />
-            <p className="text-xs text-[#766d63]">
-              Las rutas cargadas quedan disponibles para ajuste manual si necesitas pegar una
-              URL externa o reordenarlas directo como texto.
-            </p>
+
+              <div className="mt-4 space-y-4">
+                {productForm.variants.map((variant, variantIndex) => {
+                  const variantImages = splitLines(variant.imagesText);
+
+                  return (
+                    <div
+                      key={variant.key}
+                      className="rounded-2xl border border-[#e7ddd1] bg-white p-4"
+                    >
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <p className="text-xs uppercase tracking-[0.16em] text-[#7a7167]">
+                            Variante {variantIndex + 1}
+                          </p>
+                          <p className="mt-1 text-sm text-[#5b5249]">
+                            {variant.fabricColorName.trim() || "Tela"} / {variant.printColorName.trim() || "Estampa"}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          className="rounded-full border border-[#efc6bb] px-4 py-2 text-[11px] uppercase tracking-[0.12em] text-[#9a3412]"
+                          onClick={() => removeProductVariant(variantIndex)}
+                        >
+                          Quitar variante
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-2">
+                        <div className="grid gap-3">
+                          <input
+                            className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
+                            placeholder="Color de tela"
+                            value={variant.fabricColorName}
+                            onChange={(event) =>
+                              updateProductVariant(variantIndex, (currentVariant) => ({
+                                ...currentVariant,
+                                fabricColorName: event.target.value
+                              }))
+                            }
+                          />
+                          <input
+                            className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
+                            placeholder="HEX tela"
+                            value={variant.fabricColorHex}
+                            onChange={(event) =>
+                              updateProductVariant(variantIndex, (currentVariant) => ({
+                                ...currentVariant,
+                                fabricColorHex: event.target.value
+                              }))
+                            }
+                          />
+                          <p className="text-xs text-[#766d63]">
+                            Ejemplo: <code>Negro</code> y <code>#111111</code>.
+                          </p>
+                        </div>
+
+                        <div className="grid gap-3">
+                          <input
+                            className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
+                            placeholder="Color de estampa"
+                            value={variant.printColorName}
+                            onChange={(event) =>
+                              updateProductVariant(variantIndex, (currentVariant) => ({
+                                ...currentVariant,
+                                printColorName: event.target.value
+                              }))
+                            }
+                          />
+                          <input
+                            className="rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
+                            placeholder="HEX estampa"
+                            value={variant.printColorHex}
+                            onChange={(event) =>
+                              updateProductVariant(variantIndex, (currentVariant) => ({
+                                ...currentVariant,
+                                printColorHex: event.target.value
+                              }))
+                            }
+                          />
+                          <p className="text-xs text-[#766d63]">
+                            Ejemplo: <code>Blanco</code> y <code>#ffffff</code>.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-4 flex flex-wrap gap-4 text-xs text-[#5b5249]">
+                        <span className="inline-flex items-center gap-2 rounded-full bg-[#f6f1e8] px-3 py-1">
+                          <span
+                            className="h-3 w-3 rounded-full border border-black/10"
+                            style={{ backgroundColor: variant.fabricColorHex || "#ffffff" }}
+                          />
+                          Tela: {variant.fabricColorName.trim() || "Sin nombre"}
+                        </span>
+                        <span className="inline-flex items-center gap-2 rounded-full bg-[#f6f1e8] px-3 py-1">
+                          <span
+                            className="h-3 w-3 rounded-full border border-black/10"
+                            style={{ backgroundColor: variant.printColorHex || "#ffffff" }}
+                          />
+                          Estampa: {variant.printColorName.trim() || "Sin nombre"}
+                        </span>
+                      </div>
+
+                      <div className="mt-4 space-y-3">
+                        <label className="flex cursor-pointer items-center justify-center rounded-lg border border-dashed border-[#cfc4b5] px-4 py-3 text-sm text-[#3c342d] transition-colors hover:bg-[#faf7f2]">
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            multiple
+                            className="hidden"
+                            onChange={(event) => void handleVariantImagesUpload(variantIndex, event)}
+                          />
+                          {isUploadingProductImages
+                            ? "Subiendo imagenes..."
+                            : "Adjuntar imagenes de esta variante"}
+                        </label>
+                        <p className="text-xs text-[#766d63]">
+                          La primera imagen sera la portada de esta combinacion, la segunda se usa
+                          para hover y el resto arma la galeria.
+                        </p>
+                      </div>
+
+                      {variantImages.length > 0 ? (
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                          {variantImages.map((image, imageIndex) => (
+                            <div
+                              key={`${variant.key}-${image}-${imageIndex}`}
+                              className="rounded-xl border border-[#ece4d8] bg-[#faf7f2] p-3"
+                            >
+                              <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-[#f1ece4]">
+                                <Image
+                                  src={image}
+                                  alt={`Imagen ${imageIndex + 1} de la variante ${variantIndex + 1}`}
+                                  fill
+                                  sizes="(max-width: 768px) 100vw, 33vw"
+                                  className="object-cover"
+                                />
+                              </div>
+                              <p className="mt-3 text-xs uppercase tracking-[0.14em] text-[#7a7167]">
+                                {imageIndex === 0 ? "Portada" : imageIndex === 1 ? "Hover" : `Galeria ${imageIndex - 1}`}
+                              </p>
+                              <p className="mt-1 truncate text-xs text-[#5b5249]">{image}</p>
+                              <div className="mt-3 flex gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-[#d0c6b9] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#3c342d] disabled:opacity-40"
+                                  onClick={() => moveVariantImage(variantIndex, imageIndex, -1)}
+                                  disabled={imageIndex === 0}
+                                >
+                                  Subir
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-[#d0c6b9] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#3c342d] disabled:opacity-40"
+                                  onClick={() => moveVariantImage(variantIndex, imageIndex, 1)}
+                                  disabled={imageIndex === variantImages.length - 1}
+                                >
+                                  Bajar
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-full border border-[#efc6bb] px-3 py-1 text-[11px] uppercase tracking-[0.12em] text-[#9a3412]"
+                                  onClick={() => removeVariantImage(variantIndex, imageIndex)}
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : null}
+
+                      <textarea
+                        className="mt-4 rounded-lg border border-[#d9d0c3] px-3 py-2 text-sm"
+                        placeholder={"Imagenes de esta variante (URL por linea)"}
+                        rows={4}
+                        value={variant.imagesText}
+                        onChange={(event) =>
+                          updateProductVariant(variantIndex, (currentVariant) => ({
+                            ...currentVariant,
+                            imagesText: event.target.value
+                          }))
+                        }
+                      />
+                      <p className="mt-2 text-xs text-[#766d63]">
+                        Tambien podes pegar URLs manualmente si necesitas ajustar el orden o sumar
+                        una imagen externa.
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
             <label className="flex items-center gap-2 text-sm">
               <input
                 type="checkbox"

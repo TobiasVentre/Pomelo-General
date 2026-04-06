@@ -20,6 +20,41 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isProductColor(value: unknown): value is CreateProductCommand["variants"][number]["fabricColor"] {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.name) &&
+    isNonEmptyString(value.hex) &&
+    /^#(?:[0-9a-fA-F]{3}){1,2}$/.test(value.hex.trim())
+  );
+}
+
+function isProductVariant(value: unknown): value is CreateProductCommand["variants"][number] {
+  return (
+    isRecord(value) &&
+    isProductColor(value.fabricColor) &&
+    isProductColor(value.printColor) &&
+    isStringArray(value.images)
+  );
+}
+
+function buildVariantKey(variant: CreateProductCommand["variants"][number]): string {
+  return [
+    variant.fabricColor.name.trim().toLowerCase(),
+    variant.fabricColor.hex.trim().toLowerCase(),
+    variant.printColor.name.trim().toLowerCase(),
+    variant.printColor.hex.trim().toLowerCase()
+  ].join("|");
+}
+
 export function validateProductPayload(
   body: Partial<CreateProductCommand>
 ): { errors: string[]; normalized: CreateProductCommand | null } {
@@ -36,7 +71,8 @@ export function validateProductPayload(
     "rating",
     "shippingInfo",
     "fabricCare",
-    "isActive"
+    "isActive",
+    "variants"
   ];
 
   requiredFields.forEach((field) => {
@@ -63,25 +99,29 @@ export function validateProductPayload(
     errors.push("Field 'availableSizes' must be string[]");
   }
 
-  if (
-    body.images !== undefined &&
-    !isStringArray(body.images)
-  ) {
-    errors.push("Field 'images' must be string[]");
-  }
+  if (body.variants !== undefined) {
+    const validVariants = Array.isArray(body.variants) && body.variants.every(isProductVariant);
 
-  if (body.availableColors !== undefined) {
-    const validColors =
-      Array.isArray(body.availableColors) &&
-      body.availableColors.every(
-        (color) =>
-          typeof color === "object" &&
-          color !== null &&
-          typeof color.name === "string" &&
-          typeof color.hex === "string"
-      );
-    if (!validColors) {
-      errors.push("Field 'availableColors' must be array of {name, hex}");
+    if (!validVariants) {
+      errors.push("Field 'variants' must be array of {fabricColor, printColor, images}");
+    } else if (body.variants.length === 0) {
+      errors.push("Field 'variants' must contain at least one variant");
+    } else {
+      const seenKeys = new Set<string>();
+
+      body.variants.forEach((variant, index) => {
+        if (variant.images.length === 0) {
+          errors.push(`Variant at index ${index} must contain at least one image`);
+        }
+
+        const variantKey = buildVariantKey(variant);
+        if (seenKeys.has(variantKey)) {
+          errors.push("Field 'variants' must not contain duplicated tela + estampa combinations");
+          return;
+        }
+
+        seenKeys.add(variantKey);
+      });
     }
   }
 
@@ -104,9 +144,8 @@ export function validateProductPayload(
       shippingInfo: body.shippingInfo as string,
       fabricCare: body.fabricCare as string,
       isActive: body.isActive as boolean,
-      availableColors: body.availableColors ?? [],
-      availableSizes: body.availableSizes ?? [],
-      images: body.images ?? []
+      variants: body.variants as CreateProductCommand["variants"],
+      availableSizes: body.availableSizes ?? []
     }
   };
 }
