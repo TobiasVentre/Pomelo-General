@@ -3,15 +3,19 @@ import Image from "next/image";
 interface ProductGalleryProps {
   name: string;
   images: string[];
+  activeImage?: string;
 }
 
 export default function ProductGallery({
   name,
-  images
+  images,
+  activeImage
 }: ProductGalleryProps): JSX.Element {
+  const displayImages = activeImage ? [activeImage, ...images.slice(1)] : images;
+
   return (
     <section className="grid gap-6">
-      {images.map((image, index) => (
+      {displayImages.map((image, index) => (
         <div key={`${name}-${index}`} className="relative aspect-[3/4] overflow-hidden bg-[#f2efe9]">
           <Image
             src={image}

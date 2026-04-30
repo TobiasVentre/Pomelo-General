@@ -5,6 +5,12 @@ export interface ProductColor {
   hex: string;
 }
 
+export interface ColorCombo {
+  shirtColor: ProductColor;
+  printColor: ProductColor;
+  image: string;
+}
+
 export interface ProductData {
   id: string;
   slug: string;
@@ -22,6 +28,7 @@ export interface ProductData {
   availableColors: ProductColor[];
   availableSizes: string[];
   images: string[];
+  colorCombos?: ColorCombo[];
 }
 
 export class Product {
@@ -42,12 +49,14 @@ export class Product {
   private _availableColors: ProductColor[];
   private _availableSizes: string[];
   private _images: string[];
+  private _colorCombos: ColorCombo[];
 
   get priceArs() { return this._priceArs; }
   get isActive() { return this._isActive; }
   get availableColors() { return this._availableColors; }
   get availableSizes() { return this._availableSizes; }
   get images() { return this._images; }
+  get colorCombos() { return this._colorCombos; }
 
   private constructor(data: ProductData) {
     this.id = data.id;
@@ -66,6 +75,7 @@ export class Product {
     this._availableColors = data.availableColors;
     this._availableSizes = data.availableSizes;
     this._images = data.images;
+    this._colorCombos = data.colorCombos ?? [];
   }
 
   static create(data: Omit<ProductData, "id">): Product {
@@ -94,12 +104,13 @@ export class Product {
   activate(): void { this._isActive = true; }
   deactivate(): void { this._isActive = false; }
 
-  replaceVariants(colors: ProductColor[], sizes: string[], images: string[]): void {
+  replaceVariants(colors: ProductColor[], sizes: string[], images: string[], colorCombos?: ColorCombo[]): void {
     if (new Set(sizes).size !== sizes.length) {
       throw new Error("Product availableSizes must not contain duplicates");
     }
     this._availableColors = [...colors];
     this._availableSizes = [...sizes];
     this._images = [...images];
+    if (colorCombos !== undefined) this._colorCombos = [...colorCombos];
   }
 }

@@ -1,4 +1,5 @@
 import type { GetServerSideProps } from "next";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import ProductGallery from "../../components/ProductGallery";
@@ -17,6 +18,11 @@ interface ProductDetailPageProps {
 export default function ProductDetailPage({
   product
 }: ProductDetailPageProps): JSX.Element {
+  const [activeComboImage, setActiveComboImage] = useState<string | null>(null);
+  const handleComboChange = useCallback((image: string | null) => {
+    setActiveComboImage(image);
+  }, []);
+
   return (
     <main className="min-h-screen">
       <Navbar />
@@ -28,8 +34,12 @@ export default function ProductDetailPage({
       </section>
 
       <section className="mx-auto mb-20 mt-6 grid max-w-[1400px] gap-8 px-5 md:px-8 lg:grid-cols-[1.8fr_1fr] lg:gap-10">
-        <ProductGallery name={product.name} images={product.galleryImages} />
-        <ProductInfo product={product} />
+        <ProductGallery
+          name={product.name}
+          images={product.galleryImages}
+          activeImage={activeComboImage ?? undefined}
+        />
+        <ProductInfo product={product} onComboChange={handleComboChange} />
       </section>
     </main>
   );

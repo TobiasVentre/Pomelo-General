@@ -15,6 +15,12 @@ export interface ProductColor {
   hex: string;
 }
 
+export interface ColorCombo {
+  shirtColor: ProductColor;
+  printColor: ProductColor;
+  image: string;
+}
+
 export interface ProductItem {
   id: string;
   slug: string;
@@ -32,6 +38,7 @@ export interface ProductItem {
   galleryImages: string[];
   shippingInfo: string;
   fabricCare: string;
+  colorCombos?: ColorCombo[];
 }
 
 export interface BackendCollectionDto {
@@ -62,6 +69,7 @@ export interface BackendProductDto {
   shippingInfo: string;
   fabricCare: string;
   isActive: boolean;
+  colorCombos?: ColorCombo[];
 }
 
 const DEFAULT_IMAGE =
@@ -142,7 +150,8 @@ export function mapBackendProductToUi(
       galleryImages[2]
     ],
     shippingInfo: product.shippingInfo,
-    fabricCare: product.fabricCare
+    fabricCare: product.fabricCare,
+    colorCombos: product.colorCombos
   };
 }
 

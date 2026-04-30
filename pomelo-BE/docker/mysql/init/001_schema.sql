@@ -25,6 +25,7 @@ CREATE TABLE IF NOT EXISTS products (
   shipping_info VARCHAR(400) NOT NULL,
   fabric_care VARCHAR(400) NOT NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  color_combos JSON NULL,
   display_order INT NOT NULL DEFAULT 100,
   created_at DATETIME NOT NULL,
   updated_at DATETIME NOT NULL

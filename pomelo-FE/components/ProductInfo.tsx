@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { formatArs, type ProductItem } from "../lib/catalog-data";
 import { useCart } from "../context/cart-context";
 import AddToBagButton from "./AddToBagButton";
@@ -7,17 +7,52 @@ import SizeSelector from "./SizeSelector";
 
 interface ProductInfoProps {
   product: ProductItem;
+  onComboChange?: (image: string | null) => void;
 }
 
-export default function ProductInfo({ product }: ProductInfoProps): JSX.Element {
+export default function ProductInfo({ product, onComboChange }: ProductInfoProps): JSX.Element {
   const { addItem } = useCart();
+  const combos = product.colorCombos ?? [];
+  const hasColorCombos = combos.length > 0;
+
+  // — single-color mode (no combos) —
   const [selectedColor, setSelectedColor] = useState(product.availableColors[0]?.name ?? "");
   const [selectedSize, setSelectedSize] = useState(product.availableSizes[0] ?? "");
 
-  const selectedColorHex = useMemo(
-    () => product.availableColors.find((color) => color.name === selectedColor)?.hex,
-    [product.availableColors, selectedColor]
+  // — combo mode —
+  const [selectedShirt, setSelectedShirt] = useState(combos[0]?.shirtColor.name ?? "");
+  const [selectedPrint, setSelectedPrint] = useState(combos[0]?.printColor.name ?? "");
+
+  const shirtColors = useMemo(
+    () => [...new Map(combos.map((c) => [c.shirtColor.name, c.shirtColor])).values()],
+    [combos]
   );
+
+  const availablePrintColors = useMemo(
+    () => combos.filter((c) => c.shirtColor.name === selectedShirt).map((c) => c.printColor),
+    [combos, selectedShirt]
+  );
+
+  const activeCombo = useMemo(
+    () => combos.find((c) => c.shirtColor.name === selectedShirt && c.printColor.name === selectedPrint),
+    [combos, selectedShirt, selectedPrint]
+  );
+
+  // When shirt color changes, auto-select first available print color
+  useEffect(() => {
+    const first = availablePrintColors[0]?.name;
+    if (first) setSelectedPrint(first);
+  }, [selectedShirt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Notify parent whenever active combo image changes
+  useEffect(() => {
+    if (!hasColorCombos || !onComboChange) return;
+    onComboChange(activeCombo?.image ?? null);
+  }, [activeCombo, hasColorCombos, onComboChange]);
+
+  const cartColor = hasColorCombos
+    ? `${selectedShirt} / ${selectedPrint}`
+    : selectedColor;
 
   return (
     <aside className="top-24 h-fit border border-black/10 bg-white p-6 lg:sticky lg:p-8">
@@ -29,19 +64,41 @@ export default function ProductInfo({ product }: ProductInfoProps): JSX.Element 
       </p>
       <p className="mt-4 text-lg">{formatArs(product.priceArs)}</p>
 
-      <div className="mt-7 space-y-3">
-        <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
-          Color: {selectedColor}
-        </p>
-        <ColorSwatches
-          colors={product.availableColors}
-          selected={selectedColor}
-          onSelect={setSelectedColor}
-        />
-        {selectedColorHex ? (
-          <p className="text-xs text-[#6a6158]">Muestra: {selectedColorHex}</p>
-        ) : null}
-      </div>
+      {hasColorCombos ? (
+        <>
+          <div className="mt-7 space-y-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
+              Color remera: {selectedShirt}
+            </p>
+            <ColorSwatches
+              colors={shirtColors}
+              selected={selectedShirt}
+              onSelect={setSelectedShirt}
+            />
+          </div>
+          <div className="mt-5 space-y-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
+              Color estampa: {selectedPrint}
+            </p>
+            <ColorSwatches
+              colors={availablePrintColors}
+              selected={selectedPrint}
+              onSelect={setSelectedPrint}
+            />
+          </div>
+        </>
+      ) : (
+        <div className="mt-7 space-y-3">
+          <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
+            Color: {selectedColor}
+          </p>
+          <ColorSwatches
+            colors={product.availableColors}
+            selected={selectedColor}
+            onSelect={setSelectedColor}
+          />
+        </div>
+      )}
 
       <div className="mt-7 space-y-3">
         <p className="text-xs uppercase tracking-[0.12em] text-[#6a6158]">
@@ -62,7 +119,7 @@ export default function ProductInfo({ product }: ProductInfoProps): JSX.Element 
               slug: product.slug,
               name: product.name,
               priceArs: product.priceArs,
-              color: selectedColor,
+              color: cartColor,
               size: selectedSize,
               image: product.thumbnail
             })

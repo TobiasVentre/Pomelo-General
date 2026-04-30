@@ -50,11 +50,12 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
     const sizes = command.availableSizes ?? [];
     const images = command.images ?? [];
 
+    const colorCombos = command.colorCombos ?? [];
     const sql = `
       INSERT INTO products (
         id, slug, sku, name, category, collection, price_ars, description, subtitle,
-        rating, shipping_info, fabric_care, is_active, display_order, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 100, NOW(), NOW())
+        rating, shipping_info, fabric_care, is_active, color_combos, display_order, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 100, NOW(), NOW())
     `;
 
     try {
@@ -72,7 +73,8 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
         command.rating,
         command.shippingInfo,
         command.fabricCare,
-        command.isActive ? 1 : 0
+        command.isActive ? 1 : 0,
+        colorCombos.length > 0 ? JSON.stringify(colorCombos) : null
       ]);
 
       await this.replaceProductDetails(connection, id, colors, sizes, images);
@@ -98,6 +100,7 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
       availableColors: colors,
       availableSizes: sizes,
       images,
+      colorCombos,
       shippingInfo: command.shippingInfo,
       fabricCare: command.fabricCare,
       isActive: command.isActive

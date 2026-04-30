@@ -5,6 +5,12 @@ const ProductColorSchema = z.object({
   hex: z.string().min(1)
 });
 
+const ColorComboSchema = z.object({
+  shirtColor: ProductColorSchema,
+  printColor: ProductColorSchema,
+  image: z.string().url()
+});
+
 export const CreateProductSchema = z.object({
   slug: z.string().min(1),
   sku: z.string().min(1),
@@ -20,7 +26,8 @@ export const CreateProductSchema = z.object({
   isActive: z.boolean(),
   availableColors: z.array(ProductColorSchema).default([]),
   availableSizes: z.array(z.string()).default([]),
-  images: z.array(z.string().url()).default([])
+  images: z.array(z.string().url()).default([]),
+  colorCombos: z.array(ColorComboSchema).optional()
 });
 
 export type CreateProductInput = z.infer<typeof CreateProductSchema>;

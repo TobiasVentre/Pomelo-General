@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import { Product, type ProductColor } from "../../domain/entities/product";
+import { Product, type ProductColor, type ColorCombo } from "../../domain/entities/product";
 import type { GetProductsQueryHandler } from "../../application/cqrs/contracts/queries/get-products.query-handler";
 import type { GetProductsQuery } from "../../application/cqrs/contracts/queries/get-products.query";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -18,6 +18,7 @@ type ProductRow = RowDataPacket & {
   shipping_info: string;
   fabric_care: string;
   is_active: number;
+  color_combos: string | null;
   color_name: string | null;
   color_hex: string | null;
   size_value: string | null;
@@ -79,6 +80,7 @@ export class GetProductsQueryMysqlImpl implements GetProductsQueryHandler {
       SELECT
         p.id, p.slug, p.sku, p.name, p.category, p.collection,
         p.price_ars, p.description, p.subtitle, p.rating, p.shipping_info, p.fabric_care, p.is_active,
+        p.color_combos,
         pc.name AS color_name, pc.hex AS color_hex,
         ps.size_value,
         pi.url AS image_url
@@ -97,11 +99,20 @@ export class GetProductsQueryMysqlImpl implements GetProductsQueryHandler {
       collection: string; priceArs: number; description: string; subtitle: string;
       rating: number; shippingInfo: string; fabricCare: string; isActive: boolean;
       availableColors: ProductColor[]; availableSizes: string[]; images: string[];
+      colorCombos: ColorCombo[];
     };
     const map = new Map<string, Accumulator>();
 
     rows.forEach((row) => {
       if (!map.has(row.id)) {
+        let colorCombos: ColorCombo[] = [];
+        if (row.color_combos) {
+          try {
+            colorCombos = JSON.parse(row.color_combos) as ColorCombo[];
+          } catch {
+            colorCombos = [];
+          }
+        }
         map.set(row.id, {
           id: row.id, slug: row.slug, sku: row.sku, name: row.name,
           category: row.category, collection: row.collection,
@@ -109,7 +120,7 @@ export class GetProductsQueryMysqlImpl implements GetProductsQueryHandler {
           subtitle: row.subtitle, rating: Number(row.rating ?? 0),
           shippingInfo: row.shipping_info, fabricCare: row.fabric_care,
           isActive: row.is_active === 1,
-          availableColors: [], availableSizes: [], images: []
+          availableColors: [], availableSizes: [], images: [], colorCombos
         });
       }
 

@@ -1,4 +1,4 @@
-import type { ProductColor } from "../../../../domain/entities/product";
+import type { ProductColor, ColorCombo } from "../../../../domain/entities/product";
 
 export interface CreateProductCommand {
   slug: string;
@@ -16,4 +16,5 @@ export interface CreateProductCommand {
   availableColors?: ProductColor[];
   availableSizes?: string[];
   images?: string[];
+  colorCombos?: ColorCombo[];
 }

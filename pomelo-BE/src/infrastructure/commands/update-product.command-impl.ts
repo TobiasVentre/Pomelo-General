@@ -47,12 +47,13 @@ export class UpdateProductCommandMysqlImpl implements UpdateProductCommandHandle
     const colors = command.availableColors ?? [];
     const sizes = command.availableSizes ?? [];
     const images = command.images ?? [];
+    const colorCombos = command.colorCombos ?? [];
 
     const sql = `
       UPDATE products
       SET slug = ?, sku = ?, name = ?, category = ?, collection = ?, price_ars = ?,
           description = ?, subtitle = ?, rating = ?, shipping_info = ?, fabric_care = ?,
-          is_active = ?, updated_at = NOW()
+          is_active = ?, color_combos = ?, updated_at = NOW()
       WHERE id = ?
     `;
 
@@ -71,6 +72,7 @@ export class UpdateProductCommandMysqlImpl implements UpdateProductCommandHandle
         command.shippingInfo,
         command.fabricCare,
         command.isActive ? 1 : 0,
+        colorCombos.length > 0 ? JSON.stringify(colorCombos) : null,
         command.id
       ]);
 
@@ -97,6 +99,7 @@ export class UpdateProductCommandMysqlImpl implements UpdateProductCommandHandle
         availableColors: colors,
         availableSizes: sizes,
         images,
+        colorCombos,
         shippingInfo: command.shippingInfo,
         fabricCare: command.fabricCare,
         isActive: command.isActive

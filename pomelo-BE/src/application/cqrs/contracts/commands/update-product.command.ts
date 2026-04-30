@@ -1,4 +1,4 @@
-import type { ProductColor } from "../../../../domain/entities/product";
+import type { ProductColor, ColorCombo } from "../../../../domain/entities/product";
 
 export interface UpdateProductCommand {
   id: string;
@@ -17,4 +17,5 @@ export interface UpdateProductCommand {
   availableColors?: ProductColor[];
   availableSizes?: string[];
   images?: string[];
+  colorCombos?: ColorCombo[];
 }
