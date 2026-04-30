@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
-import type { Product } from "../../domain/entities/product";
+import { Product } from "../../domain/entities/product";
 import type { UpdateProductCommandHandler } from "../../application/cqrs/contracts/commands/update-product.command-handler";
 import type { UpdateProductCommand } from "../../application/cqrs/contracts/commands/update-product.command";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -83,7 +83,7 @@ export class UpdateProductCommandMysqlImpl implements UpdateProductCommandHandle
       await this.replaceProductDetails(connection, command.id, colors, sizes, images);
       await connection.commit();
 
-      return {
+      return Product.reconstitute({
         id: command.id,
         slug: command.slug,
         sku: command.sku,
@@ -100,7 +100,7 @@ export class UpdateProductCommandMysqlImpl implements UpdateProductCommandHandle
         shippingInfo: command.shippingInfo,
         fabricCare: command.fabricCare,
         isActive: command.isActive
-      };
+      });
     } catch (error) {
       await connection.rollback();
       throw error;

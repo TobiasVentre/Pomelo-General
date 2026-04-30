@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import type { Collection } from "../../domain/entities/collection";
+import { Collection } from "../../domain/entities/collection";
 import type { GetCollectionsQueryHandler } from "../../application/cqrs/contracts/queries/get-collections.query-handler";
 import type { GetCollectionsQuery } from "../../application/cqrs/contracts/queries/get-collections.query";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -41,7 +41,7 @@ export class GetCollectionsQueryMysqlImpl implements GetCollectionsQueryHandler 
     `;
 
     const [rows] = await this.mysqlClient.getPool().query<CollectionRow[]>(sql, params);
-    return rows.map((row) => ({
+    return rows.map((row) => Collection.reconstitute({
       id: row.id,
       slug: row.slug,
       name: row.name,

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Collection } from "../../domain/entities/collection";
+import { Collection } from "../../domain/entities/collection";
 import type { CreateCollectionCommandHandler } from "../../application/cqrs/contracts/commands/create-collection.command-handler";
 import type { CreateCollectionCommand } from "../../application/cqrs/contracts/commands/create-collection.command";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -26,7 +26,7 @@ export class CreateCollectionCommandMysqlImpl implements CreateCollectionCommand
       command.displayOrder
     ]);
 
-    return {
+    return Collection.reconstitute({
       id,
       slug: command.slug,
       name: command.name,
@@ -35,6 +35,6 @@ export class CreateCollectionCommandMysqlImpl implements CreateCollectionCommand
       description: command.description,
       isActive: command.isActive,
       displayOrder: command.displayOrder
-    };
+    });
   }
 }

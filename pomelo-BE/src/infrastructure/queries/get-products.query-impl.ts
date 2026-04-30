@@ -1,5 +1,5 @@
 import type { RowDataPacket } from "mysql2";
-import type { Product } from "../../domain/entities/product";
+import { Product, type ProductColor } from "../../domain/entities/product";
 import type { GetProductsQueryHandler } from "../../application/cqrs/contracts/queries/get-products.query-handler";
 import type { GetProductsQuery } from "../../application/cqrs/contracts/queries/get-products.query";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -91,54 +91,49 @@ export class GetProductsQueryMysqlImpl implements GetProductsQueryHandler {
     `;
 
     const [rows] = await this.mysqlClient.getPool().query<ProductRow[]>(detailsSql, ids);
-    const map = new Map<string, Product>();
+
+    type Accumulator = {
+      id: string; slug: string; sku: string; name: string; category: string;
+      collection: string; priceArs: number; description: string; subtitle: string;
+      rating: number; shippingInfo: string; fabricCare: string; isActive: boolean;
+      availableColors: ProductColor[]; availableSizes: string[]; images: string[];
+    };
+    const map = new Map<string, Accumulator>();
 
     rows.forEach((row) => {
-      const current = map.get(row.id);
-      if (!current) {
+      if (!map.has(row.id)) {
         map.set(row.id, {
-          id: row.id,
-          slug: row.slug,
-          sku: row.sku,
-          name: row.name,
-          category: row.category,
-          collection: row.collection,
-          priceArs: Number(row.price_ars),
-          description: row.description,
-          subtitle: row.subtitle,
-          rating: Number(row.rating ?? 0),
-          availableColors: [],
-          availableSizes: [],
-          images: [],
-          shippingInfo: row.shipping_info,
-          fabricCare: row.fabric_care,
-          isActive: row.is_active === 1
+          id: row.id, slug: row.slug, sku: row.sku, name: row.name,
+          category: row.category, collection: row.collection,
+          priceArs: Number(row.price_ars), description: row.description,
+          subtitle: row.subtitle, rating: Number(row.rating ?? 0),
+          shippingInfo: row.shipping_info, fabricCare: row.fabric_care,
+          isActive: row.is_active === 1,
+          availableColors: [], availableSizes: [], images: []
         });
       }
 
-      const product = map.get(row.id)!;
+      const acc = map.get(row.id)!;
 
       if (row.color_name && row.color_hex) {
-        const exists = product.availableColors.some(
+        const exists = acc.availableColors.some(
           (c) => c.name === row.color_name && c.hex === row.color_hex
         );
-        if (!exists) {
-          product.availableColors.push({ name: row.color_name, hex: row.color_hex });
-        }
+        if (!exists) acc.availableColors.push({ name: row.color_name, hex: row.color_hex });
       }
 
-      if (row.size_value && !product.availableSizes.includes(row.size_value)) {
-        product.availableSizes.push(row.size_value);
+      if (row.size_value && !acc.availableSizes.includes(row.size_value)) {
+        acc.availableSizes.push(row.size_value);
       }
 
-      if (row.image_url && !product.images.includes(row.image_url)) {
-        product.images.push(row.image_url);
+      if (row.image_url && !acc.images.includes(row.image_url)) {
+        acc.images.push(row.image_url);
       }
     });
 
-    const productsById = new Map(Array.from(map.entries()));
     return ids
-      .map((id) => productsById.get(id))
-      .filter((product): product is Product => product !== undefined);
+      .map((id) => map.get(id))
+      .filter((acc): acc is Accumulator => acc !== undefined)
+      .map((acc) => Product.reconstitute(acc));
   }
 }

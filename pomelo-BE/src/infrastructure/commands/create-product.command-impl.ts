@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { PoolConnection } from "mysql2/promise";
-import type { Product } from "../../domain/entities/product";
+import { Product } from "../../domain/entities/product";
 import type { CreateProductCommandHandler } from "../../application/cqrs/contracts/commands/create-product.command-handler";
 import type { CreateProductCommand } from "../../application/cqrs/contracts/commands/create-product.command";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -84,7 +84,7 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
       connection.release();
     }
 
-    return {
+    return Product.reconstitute({
       id,
       slug: command.slug,
       sku: command.sku,
@@ -101,6 +101,6 @@ export class CreateProductCommandMysqlImpl implements CreateProductCommandHandle
       shippingInfo: command.shippingInfo,
       fabricCare: command.fabricCare,
       isActive: command.isActive
-    };
+    });
   }
 }

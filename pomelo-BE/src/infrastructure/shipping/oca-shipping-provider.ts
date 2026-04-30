@@ -7,6 +7,8 @@ import type {
   ShippingQuoteResult,
   TrackShipmentResult
 } from "../../application/contracts/gateways/shipping-provider";
+import type { ILogger } from "../../application/contracts/logger";
+import { UpstreamError } from "../../application/errors/upstream-error";
 
 export interface OcaShippingProviderConfig {
   apiBaseUrl: string;
@@ -18,6 +20,7 @@ export interface OcaShippingProviderConfig {
   user: string;
   password: string;
   productCode: string;
+  logger?: ILogger;
 }
 
 type OcaLoginResponse = {
@@ -89,12 +92,12 @@ export class OcaShippingProvider implements ShippingProvider {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`OCA login failed (${response.status}): ${text}`);
+      throw new UpstreamError("OCA", `login failed (${response.status}): ${text}`);
     }
 
     const json = (await response.json()) as OcaLoginResponse;
     if (json.success === false) {
-      throw new Error(`OCA login rejected: ${json.message ?? "unknown error"}`);
+      throw new UpstreamError("OCA", `login rejected: ${json.message ?? "unknown error"}`);
     }
 
     let token: string | null = null;
@@ -105,7 +108,7 @@ export class OcaShippingProvider implements ShippingProvider {
     }
 
     if (!token) {
-      throw new Error("OCA login response without token");
+      throw new UpstreamError("OCA", "login response without token");
     }
 
     this.accessToken = token;
@@ -129,12 +132,12 @@ export class OcaShippingProvider implements ShippingProvider {
 
     if (!response.ok) {
       const text = await response.text();
-      throw new Error(`OCA request failed (${response.status}): ${text}`);
+      throw new UpstreamError("OCA", `request failed (${response.status}): ${text}`);
     }
 
     const json = (await response.json()) as OcaApiResponse;
     if (json.success === false) {
-      throw new Error(`OCA request rejected: ${json.message ?? "unknown error"}`);
+      throw new UpstreamError("OCA", `request rejected: ${json.message ?? "unknown error"}`);
     }
 
     return (json.result ?? json) as T;

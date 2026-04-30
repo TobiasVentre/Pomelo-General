@@ -1,4 +1,4 @@
-import type { Collection } from "../../domain/entities/collection";
+import { Collection } from "../../domain/entities/collection";
 import type { UpdateCollectionCommandHandler } from "../../application/cqrs/contracts/commands/update-collection.command-handler";
 import type { UpdateCollectionCommand } from "../../application/cqrs/contracts/commands/update-collection.command";
 import type { MysqlClient } from "../persistence/mysql/mysql-client";
@@ -30,7 +30,7 @@ export class UpdateCollectionCommandMysqlImpl implements UpdateCollectionCommand
       return null;
     }
 
-    return {
+    return Collection.reconstitute({
       id: command.id,
       slug: command.slug,
       name: command.name,
@@ -39,6 +39,6 @@ export class UpdateCollectionCommandMysqlImpl implements UpdateCollectionCommand
       description: command.description,
       isActive: command.isActive,
       displayOrder: command.displayOrder
-    };
+    });
   }
 }
