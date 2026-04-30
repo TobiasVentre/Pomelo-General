@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/router";
 import { useCart } from "../context/cart-context";
 import { navLinks } from "../lib/catalog-data";
@@ -36,6 +37,13 @@ export default function Navbar(): JSX.Element {
   const darkText = router.pathname === "/shop" || router.pathname === "/product/[slug]";
   const textClass = darkText ? "text-[#1d1b18]" : "text-white";
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    setIsAdmin(
+      document.cookie.split(";").some((c) => c.trim().startsWith("pomelo_admin_hint="))
+    );
+  }, []);
+
   return (
     <header className="sticky top-0 z-30 backdrop-blur-md bg-white/30 border-b border-white/20">
       <div className={`mx-auto flex max-w-[1400px] items-center justify-between px-5 py-4 md:px-8 ${textClass}`}>
@@ -44,17 +52,23 @@ export default function Navbar(): JSX.Element {
         </Link>
 
         <nav className="hidden items-center gap-7 text-sm uppercase tracking-[0.16em] md:flex">
-          {navLinks.map((link) => {
-            return (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="transition-opacity duration-300 hover:opacity-65"
-              >
-                {link.label}
-              </Link>
-            );
-          })}
+          {navLinks.map((link) => (
+            <Link
+              key={link.label}
+              href={link.href}
+              className="transition-opacity duration-300 hover:opacity-65"
+            >
+              {link.label}
+            </Link>
+          ))}
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="transition-opacity duration-300 hover:opacity-65"
+            >
+              Admin
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-4">

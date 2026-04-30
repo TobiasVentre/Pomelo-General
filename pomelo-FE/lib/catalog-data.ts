@@ -97,8 +97,7 @@ export const navLinks: NavLinkItem[] = [
   { label: "Novedades", href: "#" },
   { label: "Ropa", href: "/shop" },
   { label: "Accesorios", href: "#" },
-  { label: "Marcas", href: "#" },
-  { label: "Admin", href: "/admin" }
+  { label: "Marcas", href: "#" }
 ];
 
 export function mapBackendProductToUi(

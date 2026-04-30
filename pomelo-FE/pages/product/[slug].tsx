@@ -8,6 +8,7 @@ import {
   type BackendProductDto,
   type ProductItem
 } from "../../lib/catalog-data";
+import { getBackendApiBase } from "../../lib/backend-api";
 
 interface ProductDetailPageProps {
   product: ProductItem;
@@ -42,10 +43,7 @@ export const getServerSideProps: GetServerSideProps<ProductDetailPageProps> = as
     return { notFound: true };
   }
 
-  const apiBase =
-    process.env.API_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    "http://localhost:4000";
+  const apiBase = getBackendApiBase();
 
   try {
     const response = await fetch(`${apiBase}/api/products/${slug}`);

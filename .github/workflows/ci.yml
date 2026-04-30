@@ -34,6 +34,7 @@ jobs:
       API_BASE_URL: http://localhost:4000
       AUTH_API_BASE_URL: http://localhost:8082
       AUTH_JWT_SECRET: dev-super-secret-key-change-me
+      NEXT_PUBLIC_WHATSAPP_PHONE: "5490000000000"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

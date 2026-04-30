@@ -5,6 +5,7 @@ import { getAuthApiBase } from "./auth-api";
 
 const ACCESS_COOKIE_NAME = "pomelo_admin_access_token";
 const REFRESH_COOKIE_NAME = "pomelo_admin_refresh_token";
+const HINT_COOKIE_NAME = "pomelo_admin_hint";
 const ROLE_CLAIM = "http://schemas.microsoft.com/ws/2008/06/identity/claims/role";
 const NAME_ID_CLAIM = "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier";
 
@@ -158,6 +159,12 @@ export function setAdminSessionCookies(response: ServerResponse, tokens: TokenPa
       maxAge: 60 * 60 * 24,
       secure,
       sameSite: "Lax"
+    }),
+    serializeCookie(HINT_COOKIE_NAME, "1", {
+      maxAge: 60 * 60,
+      httpOnly: false,
+      secure,
+      sameSite: "Lax"
     })
   ]);
 }
@@ -173,6 +180,12 @@ export function clearAdminSessionCookies(response: ServerResponse): void {
     }),
     serializeCookie(REFRESH_COOKIE_NAME, "", {
       maxAge: 0,
+      secure,
+      sameSite: "Lax"
+    }),
+    serializeCookie(HINT_COOKIE_NAME, "", {
+      maxAge: 0,
+      httpOnly: false,
       secure,
       sameSite: "Lax"
     })

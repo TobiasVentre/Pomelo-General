@@ -11,6 +11,7 @@ import {
   type CategoryItem,
   type ProductItem
 } from "../lib/catalog-data";
+import { getBackendApiBase } from "../lib/backend-api";
 
 interface ShopPageProps {
   initialProducts: ProductItem[];
@@ -74,10 +75,7 @@ export default function ShopPage({
 }
 
 export const getServerSideProps: GetServerSideProps<ShopPageProps> = async () => {
-  const apiBase =
-    process.env.API_BASE_URL ??
-    process.env.NEXT_PUBLIC_API_BASE_URL ??
-    "http://localhost:4000";
+  const apiBase = getBackendApiBase();
 
   try {
     const [collectionsResponse, productsResponse] = await Promise.all([

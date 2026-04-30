@@ -9,7 +9,7 @@ import {
 import { formatArs } from "../lib/catalog-data";
 
 const STORAGE_KEY = "pomelo_carrito";
-const WHATSAPP_PHONE = "5491112345678";
+const WHATSAPP_PHONE = process.env.NEXT_PUBLIC_WHATSAPP_PHONE ?? "";
 const ENVIO_MOCK_ARS = 3500;
 
 export interface CartItem {
@@ -132,7 +132,7 @@ export function CartProvider({ children }: { children: ReactNode }): JSX.Element
     const message = [
       "Hola! Quiero realizar este pedido:",
       ...lines,
-      `Envio (mock): ${formatArs(shippingArs)}`,
+      `Envio: ${formatArs(shippingArs)}`,
       `Total estimado: ${formatArs(totalArs)}`
     ].join("\n");
 
