@@ -33,6 +33,25 @@ fi
 mkdir -p pomelo-FE/public/uploads
 
 docker compose "${COMPOSE_ARGS[@]}" config >/dev/null
+
+# Start MySQL first and wait for it to be healthy before running migrations
+docker compose "${COMPOSE_ARGS[@]}" up -d pomelo_mysql
+echo "Waiting for MySQL to be healthy..."
+for attempt in $(seq 1 30); do
+  if docker compose "${COMPOSE_ARGS[@]}" exec -T pomelo_mysql \
+      mysqladmin ping -h localhost -uroot -p"${MYSQL_ROOT_PASSWORD:-root}" --silent 2>/dev/null; then
+    echo "MySQL is healthy."
+    break
+  fi
+  if [[ $attempt -eq 30 ]]; then
+    echo "MySQL did not become healthy in time." >&2
+    exit 1
+  fi
+  sleep 5
+done
+
+bash scripts/run-migrations.sh "$REPO_ROOT"
+
 docker compose "${COMPOSE_ARGS[@]}" up -d --build --remove-orphans
 
 if command -v curl >/dev/null 2>&1; then
